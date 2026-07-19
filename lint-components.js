@@ -1,10 +1,27 @@
 // ============================================================================
-// Component lint v2.2 — base property lint + FOREIGN-BINDING ADOPTION LINT
+// Component lint v2.3 — base property lint + FOREIGN-BINDING ADOPTION LINT
 // Run via the MCP Bridge plugin (Cloud Mode) — ask Claude to fetch this raw
 // file and run it. Report mode is read-only; fix mode rebinds only value-
 // identical foreign bindings.
 //
 // File: [Client Name] — [Platform] UI + DS (2026 Tailwind)  key Pb8ZHU7RUJcLmobwZ6wfKm
+// v2.3 change vs v2.2 (2026-07-19): added check 10 — DEFAULT LAYER NAMES on
+//   structural containers. Named structure is what humans navigate in handoff
+//   and what agents parse; "Frame 427" carries zero information either way.
+//   REPORT-ONLY, never auto-renamed (naming is judgment). Scope, deliberately
+//   narrow to stay signal-only:
+//     - container types only: FRAME / GROUP / SECTION / COMPONENT /
+//       COMPONENT_SET. Shape and vector nodes (Rectangle/Vector/…) are NOT
+//       checked — icon and illustration internals (Flags, the Input__dropdown
+//       flag art) would flood the report with harmless noise.
+//     - inside component masters on ❖ Components (non-instance, Device UI
+//       masters skipped — chrome artwork), PLUS top-level frames on the
+//       🎨 UI Design page (screens need names).
+//     - a "default name" is exactly Figma's generated pattern:
+//       /^(Frame|Group|Section|Component)\s\d+$/. Variant masters named by
+//       their properties ("State=Hover") are correct naming, never flagged.
+//   Every finding carries its page + master/screen path so the designer can
+//   search the layer panel directly and rename for the node's role.
 // v2.2 change vs v2.1 (2026-07-18): added base check 6 — HARDCODED SPACING
 //   (padding/gap). After the spacing-binding pass, every component-internal,
 //   non-set-root padding/gap that matches the spacing scale is bound; this
@@ -32,6 +49,8 @@
 //     4. Text nodes without a text style (or mixed)
 //     5. Effects without an effect style
 //     6. Hardcoded padding/gap (unbound, > 0) outside documented exceptions   [NEW v2.2]
+//    10. Default container names (Frame N/Group N/…) in masters + on
+//        🎨 UI Design top-level screens — report-only, never auto-renamed    [NEW v2.3]
 //  B. Adoption lint (whole file):
 //     7. Variable bindings that don't resolve to this file's collections
 //        → REMOTE (subscribed library var) or DANGLING (deleted local var)
@@ -83,6 +102,10 @@ const CONFIG = {
 
 // --- Device chrome + spacing exceptions -------------------------------------
 const DEVICE_RE = /status bar|home indicator|cursor|device ui/i;
+
+// v2.3: Figma's generated container names — flagged wherever structure matters.
+const DEFAULT_NAME_RE = /^(Frame|Group|Section|Component)\s\d+$/;
+const CONTAINER_TYPES = new Set(['FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'COMPONENT_SET']);
 
 // Keyed spacing exceptions. comp/prop are regexes tested against the master
 // name and the property name; val is the exact px value. All three must match.
@@ -212,7 +235,7 @@ for (const v of allVars) {
 
 // =============================== A. BASE LINT ================================
 const base = { primColorBindings: {}, rawPaints: {}, hardRadius: {}, unstyledText: [], rawEffects: [],
-               hardSpacing: {}, spacingExceptions: 0 };
+               hardSpacing: {}, spacingExceptions: 0, defaultNames: {} };
 const comps = figma.root.children.find(p => p.name === '❖ Components');
 await comps.loadAsync();
 for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'COMPONENT') && n.parent.type !== 'COMPONENT_SET')) {
@@ -262,6 +285,12 @@ for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'CO
       }
       if (n.layoutWrap === 'WRAP' && 'counterAxisSpacing' in n) checkSpace(n.counterAxisSpacing, 'counterAxisSpacing');
     }
+    // 10. Default layer names on structural containers (masters)  [NEW v2.3]
+    //     Report-only. Shape/vector nodes deliberately excluded (see header).
+    if (CONTAINER_TYPES.has(n.type) && DEFAULT_NAME_RE.test(n.name) && !DEVICE_RE.test(m.name)) {
+      const key = '❖ Components | MASTER:' + m.name + ' > "' + n.name + '"';
+      base.defaultNames[key] = (base.defaultNames[key] || 0) + 1;
+    }
     if (n.type === 'TEXT' && !(n.textStyleId && n.textStyleId !== '' && n.textStyleId !== figma.mixed)) {
       base.unstyledText.push(m.name + ' > ' + n.name);
     }
@@ -274,6 +303,19 @@ for (const k of Object.keys(base.primColorBindings)) base.primColorBindings[k] =
 base.unstyledText = [...new Set(base.unstyledText)];
 base.rawEffects = [...new Set(base.rawEffects)];
 base.hardSpacingTotal = Object.values(base.hardSpacing).reduce((a, b) => a + b, 0);
+
+// 10b. Default names on 🎨 UI Design top-level frames (screens)  [NEW v2.3]
+const uiPage = figma.root.children.find(p => p.name === '🎨 UI Design');
+if (uiPage) {
+  await uiPage.loadAsync();
+  for (const n of uiPage.children) {
+    if (CONTAINER_TYPES.has(n.type) && DEFAULT_NAME_RE.test(n.name)) {
+      const key = '🎨 UI Design | screen "' + n.name + '"';
+      base.defaultNames[key] = (base.defaultNames[key] || 0) + 1;
+    }
+  }
+}
+base.defaultNamesTotal = Object.values(base.defaultNames).reduce((a, b) => a + b, 0);
 
 // ============================ B. ADOPTION LINT ================================
 const adoption = {
@@ -353,11 +395,15 @@ const clean = Object.keys(adoption.flaggedVars).length === 0 &&
               Object.keys(adoption.flaggedStyles).length === 0 &&
               Object.keys(adoption.flaggedRemoteInstances).length === 0;
 const spacingClean = Object.keys(base.hardSpacing).length === 0;
+const namingClean = Object.keys(base.defaultNames).length === 0;
 return {
   verdict: clean ? '✅ ADOPTION CLEAN — no unsanctioned foreign material' : '⚠️ FOREIGN MATERIAL FLAGGED',
   spacingVerdict: spacingClean
     ? '✅ SPACING BOUND — no unbound spacing outside documented exceptions'
     : '⚠️ UNBOUND SPACING FOUND — ' + base.hardSpacingTotal + ' node-props',
+  namingVerdict: namingClean
+    ? '✅ NAMED — no default container names in masters or on UI Design screens'
+    : '⚠️ DEFAULT NAMES FOUND — ' + base.defaultNamesTotal + ' containers; rename each for its role (search the quoted name in the layer panel)',
   nodesScanned,
   base,
   adoption,
