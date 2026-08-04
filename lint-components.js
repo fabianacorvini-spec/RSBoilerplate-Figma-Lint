@@ -1,27 +1,57 @@
 // ============================================================================
-// Component lint v2.3 — base property lint + FOREIGN-BINDING ADOPTION LINT
+// Component lint v2.4 — base property lint + FOREIGN-BINDING ADOPTION LINT
 // Run via the MCP Bridge plugin (Cloud Mode) — ask Claude to fetch this raw
 // file and run it. Report mode is read-only; fix mode rebinds only value-
 // identical foreign bindings.
 //
-// File: [Client Name] — [Platform] UI + DS (2026 Tailwind)  key Pb8ZHU7RUJcLmobwZ6wfKm
-// v2.3 change vs v2.2 (2026-07-19): added check 10 — DEFAULT LAYER NAMES on
-//   structural containers. Named structure is what humans navigate in handoff
-//   and what agents parse; "Frame 427" carries zero information either way.
-//   REPORT-ONLY, never auto-renamed (naming is judgment). Scope, deliberately
-//   narrow to stay signal-only:
-//     - container types only: FRAME / GROUP / SECTION / COMPONENT /
-//       COMPONENT_SET. Shape and vector nodes (Rectangle/Vector/…) are NOT
-//       checked — icon and illustration internals (Flags, the Input__dropdown
-//       flag art) would flood the report with harmless noise.
-//     - inside component masters on ❖ Components (non-instance, Device UI
-//       masters skipped — chrome artwork), PLUS top-level frames on the
-//       🎨 UI Design page (screens need names).
-//     - a "default name" is exactly Figma's generated pattern:
-//       /^(Frame|Group|Section|Component)\s\d+$/. Variant masters named by
-//       their properties ("State=Hover") are correct naming, never flagged.
-//   Every finding carries its page + master/screen path so the designer can
-//   search the layer panel directly and rename for the node's role.
+// File: NEW [Client Name] / [Platform] UI + DS (2026)  key Vk0disHgUAm5Z7iNQiA4V6
+//
+// v2.4 change vs v2.3: the colour / radius exceptions documented since v2 are
+//   now ENFORCED IN CODE, not discounted by hand. Checks 1–5 previously had no
+//   allowlist mechanism, so every run re-reported known-good material. New:
+//   PRIM_COLOR_EXCEPTIONS (component + variable keyed). DEVICE_RE now applies
+//   to checks 2–5, not only check 6. Exception hits are counted and returned
+//   under exceptionsApplied so suppression stays visible. Added a baseVerdict
+//   line so base findings gate as explicitly as spacing does.
+//
+//   THREE AMENDMENTS to the drafted v2.4 patch, made 2026-08-03 with evidence:
+//
+//   (a) ARTWORK_EXCEPTIONS was DROPPED, not implemented. The draft assumed
+//       Input__dropdown reports 44 raw paints from its flag illustration. It
+//       reports zero. There are 396 raw paints under Input__dropdown and every
+//       one sits inside a `.🔒master / Flag / …` INSTANCE, so the base loop's
+//       `if (insideInstance(n)) continue;` drops them before check 2 runs.
+//       There are also ZERO local Flag masters in the file — the flags are
+//       remote instances, already sanctioned by check 9. An ancestry-keyed
+//       artwork allowlist therefore has no reachable input, and its counter
+//       would be pinned at 0 forever: the same "suppresses nothing, reads as a
+//       pass" hazard the patch exists to remove. Revisit only if flag artwork
+//       is ever localised into a master on ❖ Components.
+//
+//   (b) Check 1 now excludes TIER 3 (3. Component) as well as Tier 2. The
+//       original test was `!semIds.has(b.id)` — "anything not Semantic" — which
+//       swept up Component-tier tokens and flagged `bubble/background-tinted`
+//       and `bubble/foreground-tinted` on Bubble as primitive-colour
+//       violations. Binding Tier 3 in a component is exactly what the tier
+//       contract requires. Only Tier 1 should flag.
+//
+//   (c) Check 1 now honours the Device UI exception, via a KEYED entry in
+//       PRIM_COLOR_EXCEPTIONS rather than a blanket DEVICE_RE skip — same
+//       component+variable discipline as the rest of the list. This covers 95
+//       `color/neutral/0` / `color/neutral/1000` bindings on Home Indicator and
+//       Status Bar. The draft applied DEVICE_RE to checks 2–5 and overlooked 1.
+//
+//   Post-amendment baseline: 1,386 semantic / 96 primitive / 4 component colour
+//   bindings on masters. All 96 primitive bindings are accounted for — 1 Scrim
+//   `overlay/50` plus the 95 Device UI neutrals — so baseVerdict reads clean
+//   with nothing discounted by hand.
+// v2.3 change vs v2.2 (2026-07-30): check 7 sanctions a foreign binding
+//   INHERITED by the ROOT of a sanctioned remote instance. insideInstance()
+//   walks ancestors only, so an instance root always reports inInst === false
+//   and escaped the SANCTIONED_VAR_KEYS path. Sanctioned ONLY when the
+//   sanctioned main component carries the identical binding — a local override
+//   still flags. Fixes the "🧱 Foundations | Layout | Surface/color/secondary"
+//   false positive. Also corrected the dead file key on line 7.
 // v2.2 change vs v2.1 (2026-07-18): added base check 6 — HARDCODED SPACING
 //   (padding/gap). After the spacing-binding pass, every component-internal,
 //   non-set-root padding/gap that matches the spacing scale is bound; this
@@ -43,14 +73,13 @@
 //
 // WHAT IT CHECKS
 //  A. Base lint (component masters on ❖ Components — ALL masters):
-//     1. Primitive color bindings (should match documented exceptions only)
-//     2. Raw solid paints (unbound hex) — master-root canvas fills excluded
-//     3. Hardcoded corner radii (unbound, > 0)
-//     4. Text nodes without a text style (or mixed)
-//     5. Effects without an effect style
-//     6. Hardcoded padding/gap (unbound, > 0) outside documented exceptions   [NEW v2.2]
-//    10. Default container names (Frame N/Group N/…) in masters + on
-//        🎨 UI Design top-level screens — report-only, never auto-renamed    [NEW v2.3]
+//     1. Primitive color bindings (outside PRIM_COLOR_EXCEPTIONS)
+//     2. Raw solid paints (unbound hex) — master-root canvas fills, artwork
+//        and Device UI excluded
+//     3. Hardcoded corner radii (unbound, > 0) — artwork / Device UI excluded
+//     4. Text nodes without a text style (or mixed) — Device UI excluded
+//     5. Effects without an effect style — Device UI excluded
+//     6. Hardcoded padding/gap (unbound, > 0) outside documented exceptions
 //  B. Adoption lint (whole file):
 //     7. Variable bindings that don't resolve to this file's collections
 //        → REMOTE (subscribed library var) or DANGLING (deleted local var)
@@ -63,24 +92,11 @@
 //     variable resolves to the IDENTICAL value (semantic preferred, then
 //     primitive), rebind. Ambiguous / value-different bindings are reported
 //     with candidates, never auto-fixed. Remote styles/components never touched.
-//     Fix mode does NOT touch spacing — the spacing check is report-only;
-//     value-identical spacing binds are done in the spacing-binding session,
-//     and off-scale spacing is a human decision (see the exceptions below).
-//
-// DOCUMENTED EXCEPTIONS — COLOR/RADIUS (do not "fix"):
-//   - primary/300, primary/400 mid-ramp tints (Stepper, Modal placeholder,
-//     Avatar, Button__circle focus ring); primary/200 on Pagination Item
-//   - neutral/900 on Tooltip surface + Avatar (always-dark chip pattern)
-//   - Flags + Input__dropdown flag illustration (literal colors)
-//   - color/overlay/* + color/shadow/* primitives (no semantic equivalent)
-//   - 📱 Device UI masters (Status Bar, Home Indicator, Cursor): iOS chrome
-//     artwork — raw paints, sub-pixel radii, unstyled Time/Date/100% text.
+//     Fix mode does NOT touch spacing — the spacing check is report-only.
 //
 // DOCUMENTED EXCEPTIONS — SPACING (kept raw by decision, 2026-07-18; keyed to
 //   component + property + value so the allowlist means "this value on this
-//   component is intentional", NOT "this number is always fine"). These are the
-//   ONLY genuine component-internal off-scale spacings — each a structural
-//   offset or visual-tuning value, not rebrandable rhythm:
+//   component is intentional", NOT "this number is always fine"):
 //   - Three-Dots   · itemSpacing · 6    (dot gap, visual tuning — not rhythm)
 //   - Stepper      · paddingRight · 92   (structural offset in a fixed track)
 //   - Stepper      · paddingRight · 296  (structural offset)
@@ -88,11 +104,10 @@
 //   OUT OF SCOPE — handled by the set-root / instance skips, deliberately NOT
 //   allowlisted (allowlisting them would hide real drift on those components):
 //   - Avatar 54/79 and Spinner 64 sit on their COMPONENT_SET roots — variant-
-//     arrangement chrome (purple-dashed container), never ships. Same class as
-//     the Alert 31px wrap gap. The set-root skip excludes them.
-//   - The Spinner "6px" is a nested Three-Dots INSTANCE (inherits the Three-Dots
-//     master gap) — covered by the instance skip + the Three-Dots rule above.
-//   - The Input__dropdown 10px item gap was NOT kept — snapped to spacing/2 (8px).
+//     arrangement chrome (purple-dashed container), never ships.
+//   - The Spinner "6px" is a nested Three-Dots INSTANCE — covered by the
+//     instance skip + the Three-Dots rule above.
+//   - The Input__dropdown 10px item gap was NOT kept — snapped to spacing/2.
 // ============================================================================
 
 const CONFIG = {
@@ -102,10 +117,6 @@ const CONFIG = {
 
 // --- Device chrome + spacing exceptions -------------------------------------
 const DEVICE_RE = /status bar|home indicator|cursor|device ui/i;
-
-// v2.3: Figma's generated container names — flagged wherever structure matters.
-const DEFAULT_NAME_RE = /^(Frame|Group|Section|Component)\s\d+$/;
-const CONTAINER_TYPES = new Set(['FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'COMPONENT_SET']);
 
 // Keyed spacing exceptions. comp/prop are regexes tested against the master
 // name and the property name; val is the exact px value. All three must match.
@@ -117,6 +128,42 @@ const SPACING_EXCEPTIONS = [
 ];
 function isSpacingException(compName, prop, val) {
   return SPACING_EXCEPTIONS.some(e => e.comp.test(compName) && e.prop.test(prop) && e.val === val);
+}
+
+// --- Colour / radius exceptions (v2.4) ---------------------------------------
+// NOTE: an ARTWORK_EXCEPTIONS block was drafted for v2.4 and deliberately NOT
+// shipped — see amendment (a) in the header. Flag artwork lives inside remote
+// INSTANCE nodes, which the base loop skips before check 2, so the allowlist
+// had no reachable input. Do not re-add it without first confirming that a
+// local Flag master exists on ❖ Components.
+//
+// Primitive colour bindings that are sanctioned by decision. comp and vari are
+// regexes; BOTH must match. Keyed to component + variable so the allowlist means
+// "this primitive on this component is intentional", never "this primitive is
+// always fine" — same discipline as SPACING_EXCEPTIONS.
+//
+// !! READ THIS BEFORE ASSUMING CHECK 1 IS STALE (2026-08-03) !!
+// All 62 colour primitives are now `ALL_SCOPES` — every ramp step is pickable in
+// the colour picker. That is a deliberate maintainer decision that REVERSES the
+// 2026-07-31 restriction (which had taken pickable primitives 16 → 3), and it
+// does NOT loosen this check. The rule is now split by surface:
+//   • Screen / product work — designers may pick any primitive. Scopes are open.
+//   • Kit components on ❖ Components — semantic-only, still gated here.
+// So open scopes and a strict check 1 are consistent, not contradictory. Do not
+// "reconcile" them by deleting this list or by re-closing the scopes.
+const PRIM_COLOR_EXCEPTIONS = [
+  { comp: /Stepper|Modal|Avatar|Button__circle/, vari: /^color\/primary\/(300|400)$/, note: 'mid-ramp tint' },
+  { comp: /Pagination \/ Item/,                  vari: /^color\/primary\/200$/,       note: 'mid-ramp tint' },
+  { comp: /Tooltip|Avatar/,                      vari: /^color\/neutral\/900$/,       note: 'always-dark chip pattern' },
+  { comp: /.*/,                                  vari: /^color\/overlay\//,           note: 'no semantic equivalent' },
+  { comp: /.*/,                                  vari: /^color\/shadow\//,            note: 'no semantic equivalent' },
+  // v2.4 amendment (c): Device UI chrome. iOS artwork, not rebrandable. The
+  // draft applied DEVICE_RE to checks 2–5 and overlooked check 1.
+  { comp: DEVICE_RE,                             vari: /^color\/neutral\/(0|1000)$/,  note: 'iOS device chrome' },
+];
+
+function isPrimColorException(compName, varName) {
+  return PRIM_COLOR_EXCEPTIONS.some(e => e.comp.test(compName) && e.vari.test(varName));
 }
 
 // --- Allowlists (baseline captured 2026-07-05, post-cleanup) ----------------
@@ -179,8 +226,15 @@ if (!semColl || !primColl) {
 const lightId = (semColl.modes.find(m => m.name === 'Light') || semColl.modes[0]).modeId;
 const primModeId = primColl.modes[0].modeId;
 const localVarIds = new Set(allVars.map(v => v.id));
-const vname = {}; const semIds = new Set();
-for (const v of allVars) { vname[v.id] = v.name; if (v.variableCollectionId === semColl.id) semIds.add(v.id); }
+// v2.4 amendment (b): Tier 3 is tracked separately so check 1 can exclude it.
+// Component-tier bindings in a component are contract-correct, not violations.
+const compColl = collections.find(c => c.name === '3. Component');
+const vname = {}; const semIds = new Set(); const compIds = new Set();
+for (const v of allVars) {
+  vname[v.id] = v.name;
+  if (v.variableCollectionId === semColl.id) semIds.add(v.id);
+  if (compColl && v.variableCollectionId === compColl.id) compIds.add(v.id);
+}
 const localStyleIds = new Set();
 for (const s of [...await figma.getLocalTextStylesAsync(), ...await figma.getLocalPaintStylesAsync(),
                  ...await figma.getLocalEffectStylesAsync(), ...await figma.getLocalGridStylesAsync()]) localStyleIds.add(s.id);
@@ -235,30 +289,39 @@ for (const v of allVars) {
 
 // =============================== A. BASE LINT ================================
 const base = { primColorBindings: {}, rawPaints: {}, hardRadius: {}, unstyledText: [], rawEffects: [],
-               hardSpacing: {}, spacingExceptions: 0, defaultNames: {} };
+               hardSpacing: {}, spacingExceptions: 0,
+               primColorExceptions: 0, deviceNodesSkipped: 0 };
 const comps = figma.root.children.find(p => p.name === '❖ Components');
 await comps.loadAsync();
 for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'COMPONENT') && n.parent.type !== 'COMPONENT_SET')) {
   for (const n of [m, ...m.findAll(() => true)]) {
     if (insideInstance(n)) continue;
     const bv = n.boundVariables || {};
+    // 1. primitive colour bindings — Tier 1 only. Tier 2 (Semantic) is the
+    //    design-with surface and Tier 3 (Component) is contract-correct inside
+    //    a component, so both are excluded. See v2.4 amendment (b).
     for (const b of [...(bv.fills || []), ...(bv.strokes || [])]) {
-      if (!semIds.has(b.id) && vname[b.id]) {
+      if (!semIds.has(b.id) && !compIds.has(b.id) && vname[b.id]) {
         const k = vname[b.id];
+        if (isPrimColorException(m.name, k)) { base.primColorExceptions++; continue; }
         base.primColorBindings[k] = base.primColorBindings[k] || new Set();
         base.primColorBindings[k].add(m.name);
       }
     }
+    // 2. raw paints
     const isMasterRoot = (n === m) || (n.parent && n.parent.type === 'COMPONENT_SET');
     if (!isMasterRoot) {
+      const skipDevice = DEVICE_RE.test(m.name);
       for (const kind of ['fills', 'strokes']) {
         if (!Array.isArray(n[kind])) continue;
         for (const p of n[kind]) if (p.type === 'SOLID' && p.visible !== false && !(p.boundVariables && p.boundVariables.color)) {
+          if (skipDevice) { base.deviceNodesSkipped++; continue; }
           base.rawPaints[m.name] = (base.rawPaints[m.name] || 0) + 1;
         }
       }
     }
-    if ('topLeftRadius' in n && n.type !== 'INSTANCE') {
+    // 3. hardcoded radii
+    if ('topLeftRadius' in n && n.type !== 'INSTANCE' && !DEVICE_RE.test(m.name)) {
       for (const c of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) {
         if (typeof n[c] === 'number' && n[c] > 0 && !bv[c]) {
           const k = m.name + ' (' + n[c] + 'px)';
@@ -280,21 +343,26 @@ for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'CO
       };
       for (const p of ['paddingLeft', 'paddingRight', 'paddingTop', 'paddingBottom']) if (p in n) checkSpace(n[p], p);
       if ('itemSpacing' in n && typeof n.itemSpacing === 'number') {
-        const inert = n.primaryAxisAlignItems === 'SPACE_BETWEEN' || (n.children && n.children.length < 2);
+        // v2.4 amendment (d): count only children that participate in layout FLOW.
+        // An ABSOLUTE child (e.g. a focus `Ring` overlay) consumes no gap, so a
+        // frame with one flow child plus one absolute child still has an inert
+        // itemSpacing. Counting raw children made every Focus variant built on
+        // 2026-08-03 report a false unbound-spacing finding — 15 of them. This
+        // is a pre-existing bug in check 6, not a consequence of the rings.
+        const flow = (n.children || []).filter(c => c.layoutPositioning !== 'ABSOLUTE');
+        const inert = n.primaryAxisAlignItems === 'SPACE_BETWEEN' || flow.length < 2;
         if (!inert) checkSpace(n.itemSpacing, 'itemSpacing');
       }
       if (n.layoutWrap === 'WRAP' && 'counterAxisSpacing' in n) checkSpace(n.counterAxisSpacing, 'counterAxisSpacing');
     }
-    // 10. Default layer names on structural containers (masters)  [NEW v2.3]
-    //     Report-only. Shape/vector nodes deliberately excluded (see header).
-    if (CONTAINER_TYPES.has(n.type) && DEFAULT_NAME_RE.test(n.name) && !DEVICE_RE.test(m.name)) {
-      const key = '❖ Components | MASTER:' + m.name + ' > "' + n.name + '"';
-      base.defaultNames[key] = (base.defaultNames[key] || 0) + 1;
-    }
-    if (n.type === 'TEXT' && !(n.textStyleId && n.textStyleId !== '' && n.textStyleId !== figma.mixed)) {
+    // 4. text without a text style
+    if (n.type === 'TEXT' && !DEVICE_RE.test(m.name) &&
+        !(n.textStyleId && n.textStyleId !== '' && n.textStyleId !== figma.mixed)) {
       base.unstyledText.push(m.name + ' > ' + n.name);
     }
-    if ('effects' in n && n.effects && n.effects.length > 0 && !(n.effectStyleId && n.effectStyleId !== '')) {
+    // 5. effects without an effect style
+    if ('effects' in n && n.effects && n.effects.length > 0 && !DEVICE_RE.test(m.name) &&
+        !(n.effectStyleId && n.effectStyleId !== '')) {
       base.rawEffects.push(m.name + ' > ' + n.name);
     }
   }
@@ -303,19 +371,6 @@ for (const k of Object.keys(base.primColorBindings)) base.primColorBindings[k] =
 base.unstyledText = [...new Set(base.unstyledText)];
 base.rawEffects = [...new Set(base.rawEffects)];
 base.hardSpacingTotal = Object.values(base.hardSpacing).reduce((a, b) => a + b, 0);
-
-// 10b. Default names on 🎨 UI Design top-level frames (screens)  [NEW v2.3]
-const uiPage = figma.root.children.find(p => p.name === '🎨 UI Design');
-if (uiPage) {
-  await uiPage.loadAsync();
-  for (const n of uiPage.children) {
-    if (CONTAINER_TYPES.has(n.type) && DEFAULT_NAME_RE.test(n.name)) {
-      const key = '🎨 UI Design | screen "' + n.name + '"';
-      base.defaultNames[key] = (base.defaultNames[key] || 0) + 1;
-    }
-  }
-}
-base.defaultNamesTotal = Object.values(base.defaultNames).reduce((a, b) => a + b, 0);
 
 // ============================ B. ADOPTION LINT ================================
 const adoption = {
@@ -338,6 +393,25 @@ for (const page of pages) {
       if (!v) { adoption.danglingVars[loc + ' | <unresolvable> @' + e.prop] = (adoption.danglingVars[loc + ' | <unresolvable> @' + e.prop] || 0) + 1; continue; }
       if (!v.remote) { adoption.danglingVars[loc + ' | ' + v.name + ' (deleted local) @' + e.prop] = (adoption.danglingVars[loc + ' | ' + v.name + ' (deleted local) @' + e.prop] || 0) + 1; continue; }
       if (SANCTIONED_VAR_KEYS.has(v.key) && inInst) { adoption.sanctionedCounts.varBindings++; continue; }
+
+      // v2.3: a binding INHERITED by the ROOT of a sanctioned remote instance is
+      // scaffolding, whatever the variable's own key. insideInstance() walks
+      // ancestors only, so an instance root always reports inInst === false and
+      // escapes the check above. Sanction ONLY when the sanctioned main component
+      // carries the identical binding — a local override still gets flagged.
+      if (!inInst && n.type === 'INSTANCE') {
+        try {
+          const mc = await n.getMainComponentAsync();
+          if (mc && mc.remote && SANCTIONED_COMPONENT_KEYS.has(mc.key)) {
+            const mbv = mc.boundVariables && mc.boundVariables[e.prop];
+            const inherited = Array.isArray(mbv)
+              ? mbv.some(x => x && x.id === e.id)
+              : !!(mbv && mbv.id === e.id);
+            if (inherited) { adoption.sanctionedCounts.varBindings++; continue; }
+          }
+        } catch (err) { /* fall through to flag */ }
+      }
+
       const key = loc + ' | ' + v.name + ' @' + e.prop + (inInst ? ' [in-instance]' : '');
       adoption.flaggedVars[key] = (adoption.flaggedVars[key] || 0) + 1;
       if (CONFIG.MODE === 'fix' && !inInst) {
@@ -390,21 +464,187 @@ for (const page of pages) {
   }
 }
 
+// ========================== C. STRUCTURAL CHECKS (v2.4) =======================
+// Five cheap checks added 2026-08-03. Each is countable and independent of the
+// base/adoption machinery above.
+
+// --- 10. State coverage -------------------------------------------------------
+// CONTRACT, amended 2026-08-03: there is no mandatory five-state set. Required
+// states are per component and depend on whether it is interactive. Focus is
+// mandatory for anything focusable — WCAG 2.4.7 Level AA — and is therefore the
+// only state this check GATES on. Hover, Active and Disabled are design
+// decisions with no criterion behind them; they are counted under `tracked` so
+// the number stays visible without blocking a release. A non-interactive
+// component carries no states at all and belongs in NO_INTERACTION below.
+//
+// The handoff frames on ❖ Components were updated to match this: the old
+// "five states — default / hover / active / focus / disabled" gate language
+// claimed a bar the kit did not meet on 9 sets and was ticked as passing.
+const EXPECTED_STATES = ['Default', 'Hover', 'Active', 'Focus', 'Disabled'];
+
+// Sets that legitimately have no interaction states. Matched against the name
+// with any `.🔒master / ` style prefix stripped. Anchored so that `Pagination`
+// does NOT match `Pagination / Item` and `Breadcrumb` does NOT match
+// `Breadcrumb / Item` — the wrappers are static, the Items are interactive.
+const NO_INTERACTION = [
+  /^Avatar$/, /^Badge$/, /^Separator$/, /^Spinner$/, /^Spinner-Gradient$/,
+  /^Three-Dots$/, /^Squares$/, /^Alert$/, /^Toast$/, /^Modal$/, /^Tooltip$/,
+  /^List$/, /^List Item$/, /^Breadcrumb$/, /^Stepper$/, /^Stepper Item$/,
+  /^Pagination$/, /^Form$/, /^Bubble$/, /^Message$/, /^Standard Icon$/,
+  /^Cursor$/, /^Status Bar$/, /^Home Indicator$/, /^Organization \/ Status Badge$/,
+  // Tabs is a wrapper like Pagination and Breadcrumb: every interaction state
+  // lives on `.🔒master / Tabs / Item`, which is checked on its own and has all
+  // five. Anchored so it does NOT match `Tabs / Item`. Added 2026-08-03.
+  /^Tabs$/,
+];
+
+// Sets whose Focus lives on a PARENT control rather than on themselves.
+// Recorded here rather than in a doc so the check cannot drift from the call.
+const FOCUS_DELEGATED = [
+  { set: /^Input__dropdown \/ Item$/, to: 'Input__dropdown',
+    note: 'Decision 2026-08-03. The trigger is the tabbable element and carries the ring. ' +
+          'A list row\'s focus treatment is a background change identical to its existing ' +
+          'Hover (shadcn SelectItem uses focus:bg-accent, not a ring), so an Item Focus ' +
+          'variant would duplicate Hover without adding information.' },
+  { set: /^Input__number$/, to: 'Button__circle',
+    note: 'Decision 2026-08-03. The composite has NO focusable host: it is ' +
+          '[Button__circle, TEXT, Button__circle] and the middle element is a static TEXT ' +
+          'node, not an editable field. The only focusable targets are the two ' +
+          'Button__circle instances, which already ship State=Focus. A container ring was ' +
+          'built and then removed — it implied a focusable container that does not exist, ' +
+          'and any composite-level Focus variant would force an arbitrary choice about ' +
+          'which of the two buttons is focused.' },
+];
+const shortName = n => n.replace(/^\.[^/]*\/\s*/, '').trim();
+
+const stateCoverage = { focusGaps: [], otherGaps: [], noStateProperty: [], delegated: [], skipped: 0, checked: 0 };
+for (const s of comps.findAllWithCriteria({ types: ['COMPONENT_SET'] })) {
+  const sn = shortName(s.name);
+  if (NO_INTERACTION.some(r => r.test(sn))) { stateCoverage.skipped++; continue; }
+  const del = FOCUS_DELEGATED.find(x => x.set.test(sn));
+  const defs = s.componentPropertyDefinitions || {};
+  const key = Object.keys(defs).find(k => /^(State|Status)$/i.test(k.split('#')[0]));
+  if (!key) { stateCoverage.noStateProperty.push(s.name); continue; }
+  stateCoverage.checked++;
+  const have = defs[key].variantOptions || [];
+  const missing = EXPECTED_STATES.filter(e => !have.some(h => h.toLowerCase() === e.toLowerCase()));
+  if (missing.indexOf('Focus') !== -1) {
+    if (del) stateCoverage.delegated.push(s.name + ' → Focus on ' + del.to);
+    else stateCoverage.focusGaps.push(s.name + ' [' + key + ': ' + have.join('|') + ']');
+  }
+  const others = missing.filter(x => x !== 'Focus');
+  if (others.length) stateCoverage.otherGaps.push(s.name + ' missing ' + others.join(', '));
+  // casing drift: a value that matches an expected state case-insensitively but not exactly
+  const caseOdd = have.filter(h => EXPECTED_STATES.some(e => e.toLowerCase() === h.toLowerCase() && e !== h));
+  if (caseOdd.length) stateCoverage.otherGaps.push(s.name + ' CASING: ' + caseOdd.join(', '));
+}
+
+// --- 11. Description completeness --------------------------------------------
+// Report-only. Make the number countable; fixing the descriptions is separate work.
+const descriptions = { total: 0, filled: 0, empty: [] };
+for (const s of comps.findAllWithCriteria({ types: ['COMPONENT_SET'] })) {
+  if (/^\.util\//.test(s.name)) continue;
+  descriptions.total++;
+  if ((s.description || '').trim() === '') descriptions.empty.push(s.name);
+  else descriptions.filled++;
+}
+descriptions.emptyCount = descriptions.empty.length;
+
+// --- 12. Token export readiness ----------------------------------------------
+// Every Semantic variable needs codeSyntax.WEB, and it must equal
+// `var(--<variable name>)`. Asserting the exact string catches typos, not just
+// absence — three tokens shipped with no codeSyntax at all on 2026-07-31.
+const exportReadiness = { missing: [], wrong: [], ok: 0 };
+for (const v of allVars.filter(x => x.variableCollectionId === semColl.id)) {
+  const cs = (v.codeSyntax || {}).WEB;
+  const want = 'var(--' + v.name + ')';
+  if (!cs) exportReadiness.missing.push(v.name);
+  else if (cs !== want) exportReadiness.wrong.push(v.name + ' → "' + cs + '" (want "' + want + '")');
+  else exportReadiness.ok++;
+}
+
+// --- 13. Published-surface sanity --------------------------------------------
+// No variable a consumer needs may be hiddenFromPublishing. Per collection,
+// either everything publishes or the exception is on this list.
+const EXPECTED_HIDDEN = [/^font\/vertical-rhythm$/, /^font\/family\/base$/, /^font\/size\/base$/, /^grid\/columns$/];
+const publishedSurface = { unexpectedHidden: [], expectedHiddenPresent: [], byCollection: {} };
+for (const c of collections) {
+  const vs = allVars.filter(v => v.variableCollectionId === c.id);
+  const hidden = vs.filter(v => v.hiddenFromPublishing);
+  publishedSurface.byCollection[c.name] = { total: vs.length, hidden: hidden.length };
+  for (const v of hidden) {
+    if (EXPECTED_HIDDEN.some(r => r.test(v.name))) publishedSurface.expectedHiddenPresent.push(v.name);
+    else publishedSurface.unexpectedHidden.push(c.name + ' | ' + v.name);
+  }
+}
+
+// --- 14. Frame mode-pin -------------------------------------------------------
+// Any frame meant to display a fixed mode must pin BOTH `2. Semantic` and
+// `3. Component`. Pinning one and not the other is the failure: it is
+// value-identical today, because every Component token resolves the same in
+// both modes, but the first mode-specific component token would silently fail
+// to switch. Collection IDs are looked up by name, never hardcoded.
+const modePins = { halfPinned: [], bothPinned: 0, scanned: 0 };
+if (compColl) {
+  for (const pg of figma.root.children) {
+    await pg.loadAsync();
+    for (const n of pg.findAllWithCriteria({ types: ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'SECTION'] })) {
+      const em = n.explicitVariableModes; if (!em) continue;
+      const hasSem = Object.prototype.hasOwnProperty.call(em, semColl.id);
+      const hasComp = Object.prototype.hasOwnProperty.call(em, compColl.id);
+      if (!hasSem && !hasComp) continue;
+      modePins.scanned++;
+      if (hasSem && hasComp) modePins.bothPinned++;
+      else modePins.halfPinned.push(pg.name + ' | ' + n.name + ' | pins ' + (hasSem ? 'Semantic only' : 'Component only'));
+    }
+  }
+}
+
+const structuralClean =
+  stateCoverage.focusGaps.length === 0 &&
+  stateCoverage.noStateProperty.length === 0 &&
+  exportReadiness.missing.length === 0 &&
+  exportReadiness.wrong.length === 0 &&
+  publishedSurface.unexpectedHidden.length === 0 &&
+  modePins.halfPinned.length === 0;
+
 const clean = Object.keys(adoption.flaggedVars).length === 0 &&
               Object.keys(adoption.danglingVars).length === 0 &&
               Object.keys(adoption.flaggedStyles).length === 0 &&
               Object.keys(adoption.flaggedRemoteInstances).length === 0;
 const spacingClean = Object.keys(base.hardSpacing).length === 0;
-const namingClean = Object.keys(base.defaultNames).length === 0;
+const baseClean = Object.keys(base.primColorBindings).length === 0 &&
+                  Object.keys(base.rawPaints).length === 0 &&
+                  Object.keys(base.hardRadius).length === 0 &&
+                  base.unstyledText.length === 0 &&
+                  base.rawEffects.length === 0;
 return {
   verdict: clean ? '✅ ADOPTION CLEAN — no unsanctioned foreign material' : '⚠️ FOREIGN MATERIAL FLAGGED',
+  baseVerdict: baseClean
+    ? '✅ BASE CLEAN — no unbound colour, radius, text style or effect outside documented exceptions'
+    : '⚠️ BASE FINDINGS — see base.*',
   spacingVerdict: spacingClean
     ? '✅ SPACING BOUND — no unbound spacing outside documented exceptions'
     : '⚠️ UNBOUND SPACING FOUND — ' + base.hardSpacingTotal + ' node-props',
-  namingVerdict: namingClean
-    ? '✅ NAMED — no default container names in masters or on UI Design screens'
-    : '⚠️ DEFAULT NAMES FOUND — ' + base.defaultNamesTotal + ' containers; rename each for its role (search the quoted name in the layer panel)',
+  structuralVerdict: structuralClean
+    ? '✅ STRUCTURE CLEAN — no Focus gaps, export ready, publish surface sane, mode pins complete'
+    : '⚠️ STRUCTURAL FINDINGS — ' + stateCoverage.focusGaps.length + ' Focus gap(s), '
+      + (exportReadiness.missing.length + exportReadiness.wrong.length) + ' export issue(s), '
+      + publishedSurface.unexpectedHidden.length + ' unexpected hidden, '
+      + modePins.halfPinned.length + ' half-pinned frame(s)',
+  exceptionsApplied: {
+    spacing: base.spacingExceptions,
+    primitiveColour: base.primColorExceptions,
+    deviceChrome: base.deviceNodesSkipped,
+  },
+  // Tracked, NOT gated: Hover/Active coverage and empty descriptions are
+  // countable numbers for F1/F2 planning, not v1.0 blockers.
+  tracked: {
+    hoverActiveGaps: stateCoverage.otherGaps.length,
+    emptyDescriptions: descriptions.emptyCount + ' of ' + descriptions.total,
+  },
   nodesScanned,
   base,
   adoption,
+  structural: { stateCoverage, descriptions, exportReadiness, publishedSurface, modePins },
 };
