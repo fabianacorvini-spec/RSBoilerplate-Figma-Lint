@@ -1,57 +1,96 @@
 // ============================================================================
-// Component lint v2.4 — base property lint + FOREIGN-BINDING ADOPTION LINT
+// DS lint v3.10 — COMPONENT lint + TARGETED DESIGN lint + ADOPTION lint
+//
+// ⚠️ PROVENANCE: lines below are v2.2 (knowledge copy) + lint-v2_3-patch.md
+//    applied mechanically + the v3.0 additions. DIFF THIS AGAINST THE LIVE v2.3
+//    COPY BEFORE USE — if anything else was edited live on 2026-07-31, this
+//    file silently reverts it.
+//
+// v3.10 change vs v3.9 (2026-08-06): the first real run's own output exposed a
+//   fourth bug — instance ROOTS were being judged on properties inherited from their
+//   master, producing 8 unfixable findings. See the comment at the instance guard.
+//   After the fix: 3 screens, 0 findings. STILL UNEXERCISED by any real run:
+//   detached, handBuilt, lockedTheme, noTextStyle, handRadius, paletteColor,
+//   handSpacing, handShadow, hiddenLayer, namedLikeComp. The 🎨 UI Design scaffold
+//   is nearly empty (9 non-instance nodes), so it only exercised handColor,
+//   spacingGap, targeting, the scaffolding census and override classification.
+//
+// v3.9 change vs v3.8 (2026-08-06): FIRST REAL RUN against 🎨 UI Design. Three fixes,
+//   every one from live evidence rather than reasoning:
+//     - CRASH: a CONNECTOR has no findAll, and the SECTION expansion targeted it, so
+//       the walk died with 'TypeError: not a function' before any check ran. Targets
+//       must be containers; instances are honoured only when named explicitly.
+//     - layoutPositioning / counterAxisSizingMode / primaryAxisSizingMode moved into
+//       OVERRIDE_ALLOW. Every Device UI instance overrides them to pin itself to the
+//       screen edge and stretch to the breakpoint width. Layout intent, not drift.
+//     - 'boundVariables' no longer flags as one blunt field.
+//   Also corrected a TWICE-WRONG prediction: Annotation instances neither flag as
+//   unstyled text (they sit inside instances) NOR carry any overrides at all.
+//
+// v3.8 change vs v3.7 (2026-08-06): three fixes found by reading 🎨 UI Design, which
+//   turned out NOT to be empty (139 nodes of template scaffolding):
+//     - Template scaffolding is skipped by SANCTIONED_COMPONENT_KEYS membership,
+//       not by layer name. Annotation / Group Marker / Status Bar / '_ 🔒' furniture
+//       is meant to be filled in by hand. Unrecognised kinds are listed in the
+//       report so the allowlist grows from evidence.
+//     - SECTION targets expand to their child frames. A section is chrome; the
+//       screens are inside it, and treating the section as the screen broke the
+//       screen-root rule in check 12.
+//     - CONNECTOR / STICKY / WIDGET nodes skipped as board furniture.
+//
+// v3.7 change vs v3.6 (2026-08-06): page classification corrected against the LIVE
+//   page list — icons / navigation / how-to-use were being treated as design
+//   surfaces, and dash-divider pages were counted. Exclusion stays the default so
+//   pages a designer adds later are checked, not skipped. Playground and other
+//   exploration pages are now linted but NON-GATING; 🎨 UI Design is gated.
+//
+// v3.6 change vs v3.5 (2026-08-06): SPACING_SCALE extended to 56/64/80/96 to match
+//   the four new spacing rungs created in 1. Primitives.
+//
+// v3.5 change vs v3.3 (2026-08-06): removed the maintainer's name from a
+//   designer-facing message — client-file designers have no idea who that is.
+//   Unbound spacing of 0 was added in v3.4 and REVERTED here; see the comment at
+//   the design spacing check for why, so it does not get re-litigated.
+//
+// v3.3 change vs v3.2 (2026-08-06): added `designReport`, a plain-text designer
+//   report — grouped by screen, one short sentence per issue naming the FIX not the
+//   rule, a Figma deep link per row, capped at 6 examples per issue. The
+//   count-keyed maps were written for the maintainer and are gone; structured rows
+//   live in design.perScreen[screen].rows.
+//
+// v3.2 change vs v3.1 (2026-08-06): check 11 (detachment) now FAILS a screen, per
+//   Fabi. Name matching alone could not carry that, so it is now two detectors —
+//   name match plus a structural control fingerprint that survives a rename — and
+//   the generic-name matches were split into a report-only bucket.
+//   ⚠️ REQUIRES A NAMING RULE IN THE FILE: a wrapper frame must not be named
+//   exactly after a component. Without it, DETACH_IGNORE has to grow per screen,
+//   which is the allowlist antipattern this project already paid for once.
+//
+// v3.1 change vs v3.0 (2026-08-06): the design lint takes an explicit TARGET
+//   (selection / node ids / pages / auto) and reports PER SCREEN, because designers
+//   lint the screens they own, not the file. Also fixes a v3.0 bug: check 12
+//   compared against the walk's starting node, so a mid-screen target made its own
+//   pinned semantic mode look legal.
+//
+// v3.0 change vs v2.3 (2026-08-06): the base lint was hardcoded to ❖ Components,
+//   so raw hex / unbound radius / unstyled text / unbound spacing were invisible
+//   on every other page. v3.0 splits the file into SYSTEM and DESIGN surfaces and
+//   runs a per-surface rule profile, plus three new design-only checks:
+//     10. Instance override drift (non-allowlisted overriddenFields)
+//     11. Detached / hand-built primitives (name matches a master)
+//     12. Semantic mode pinned below a screen root
+//   Also folds in the owed itemSpacing refinement (ABSOLUTE children).
+//   FIX MODE IS NEVER APPLIED TO DESIGN SURFACES — rebinding inside a screen is
+//   a design act, not a value-identical repair.
+//
+// (v2.2 header retained below for the check numbering and exception rationale.)
+// ----------------------------------------------------------------------------
+// Component lint v2.3 — base property lint + FOREIGN-BINDING ADOPTION LINT
 // Run via the MCP Bridge plugin (Cloud Mode) — ask Claude to fetch this raw
 // file and run it. Report mode is read-only; fix mode rebinds only value-
 // identical foreign bindings.
 //
-// File: NEW [Client Name] / [Platform] UI + DS (2026)  key Vk0disHgUAm5Z7iNQiA4V6
-//
-// v2.4 change vs v2.3: the colour / radius exceptions documented since v2 are
-//   now ENFORCED IN CODE, not discounted by hand. Checks 1–5 previously had no
-//   allowlist mechanism, so every run re-reported known-good material. New:
-//   PRIM_COLOR_EXCEPTIONS (component + variable keyed). DEVICE_RE now applies
-//   to checks 2–5, not only check 6. Exception hits are counted and returned
-//   under exceptionsApplied so suppression stays visible. Added a baseVerdict
-//   line so base findings gate as explicitly as spacing does.
-//
-//   THREE AMENDMENTS to the drafted v2.4 patch, made 2026-08-03 with evidence:
-//
-//   (a) ARTWORK_EXCEPTIONS was DROPPED, not implemented. The draft assumed
-//       Input__dropdown reports 44 raw paints from its flag illustration. It
-//       reports zero. There are 396 raw paints under Input__dropdown and every
-//       one sits inside a `.🔒master / Flag / …` INSTANCE, so the base loop's
-//       `if (insideInstance(n)) continue;` drops them before check 2 runs.
-//       There are also ZERO local Flag masters in the file — the flags are
-//       remote instances, already sanctioned by check 9. An ancestry-keyed
-//       artwork allowlist therefore has no reachable input, and its counter
-//       would be pinned at 0 forever: the same "suppresses nothing, reads as a
-//       pass" hazard the patch exists to remove. Revisit only if flag artwork
-//       is ever localised into a master on ❖ Components.
-//
-//   (b) Check 1 now excludes TIER 3 (3. Component) as well as Tier 2. The
-//       original test was `!semIds.has(b.id)` — "anything not Semantic" — which
-//       swept up Component-tier tokens and flagged `bubble/background-tinted`
-//       and `bubble/foreground-tinted` on Bubble as primitive-colour
-//       violations. Binding Tier 3 in a component is exactly what the tier
-//       contract requires. Only Tier 1 should flag.
-//
-//   (c) Check 1 now honours the Device UI exception, via a KEYED entry in
-//       PRIM_COLOR_EXCEPTIONS rather than a blanket DEVICE_RE skip — same
-//       component+variable discipline as the rest of the list. This covers 95
-//       `color/neutral/0` / `color/neutral/1000` bindings on Home Indicator and
-//       Status Bar. The draft applied DEVICE_RE to checks 2–5 and overlooked 1.
-//
-//   Post-amendment baseline: 1,386 semantic / 96 primitive / 4 component colour
-//   bindings on masters. All 96 primitive bindings are accounted for — 1 Scrim
-//   `overlay/50` plus the 95 Device UI neutrals — so baseVerdict reads clean
-//   with nothing discounted by hand.
-// v2.3 change vs v2.2 (2026-07-30): check 7 sanctions a foreign binding
-//   INHERITED by the ROOT of a sanctioned remote instance. insideInstance()
-//   walks ancestors only, so an instance root always reports inInst === false
-//   and escaped the SANCTIONED_VAR_KEYS path. Sanctioned ONLY when the
-//   sanctioned main component carries the identical binding — a local override
-//   still flags. Fixes the "🧱 Foundations | Layout | Surface/color/secondary"
-//   false positive. Also corrected the dead file key on line 7.
+// File: [Client Name] — [Platform] UI + DS (2026 Tailwind)  key Vk0disHgUAm5Z7iNQiA4V6
 // v2.2 change vs v2.1 (2026-07-18): added base check 6 — HARDCODED SPACING
 //   (padding/gap). After the spacing-binding pass, every component-internal,
 //   non-set-root padding/gap that matches the spacing scale is bound; this
@@ -73,13 +112,12 @@
 //
 // WHAT IT CHECKS
 //  A. Base lint (component masters on ❖ Components — ALL masters):
-//     1. Primitive color bindings (outside PRIM_COLOR_EXCEPTIONS)
-//     2. Raw solid paints (unbound hex) — master-root canvas fills, artwork
-//        and Device UI excluded
-//     3. Hardcoded corner radii (unbound, > 0) — artwork / Device UI excluded
-//     4. Text nodes without a text style (or mixed) — Device UI excluded
-//     5. Effects without an effect style — Device UI excluded
-//     6. Hardcoded padding/gap (unbound, > 0) outside documented exceptions
+//     1. Primitive color bindings (should match documented exceptions only)
+//     2. Raw solid paints (unbound hex) — master-root canvas fills excluded
+//     3. Hardcoded corner radii (unbound, > 0)
+//     4. Text nodes without a text style (or mixed)
+//     5. Effects without an effect style
+//     6. Hardcoded padding/gap (unbound, > 0) outside documented exceptions   [NEW v2.2]
 //  B. Adoption lint (whole file):
 //     7. Variable bindings that don't resolve to this file's collections
 //        → REMOTE (subscribed library var) or DANGLING (deleted local var)
@@ -92,11 +130,24 @@
 //     variable resolves to the IDENTICAL value (semantic preferred, then
 //     primitive), rebind. Ambiguous / value-different bindings are reported
 //     with candidates, never auto-fixed. Remote styles/components never touched.
-//     Fix mode does NOT touch spacing — the spacing check is report-only.
+//     Fix mode does NOT touch spacing — the spacing check is report-only;
+//     value-identical spacing binds are done in the spacing-binding session,
+//     and off-scale spacing is a human decision (see the exceptions below).
+//
+// DOCUMENTED EXCEPTIONS — COLOR/RADIUS (do not "fix"):
+//   - primary/300, primary/400 mid-ramp tints (Stepper, Modal placeholder,
+//     Avatar, Button__circle focus ring); primary/200 on Pagination Item
+//   - neutral/900 on Tooltip surface + Avatar (always-dark chip pattern)
+//   - Flags + Input__dropdown flag illustration (literal colors)
+//   - color/overlay/* + color/shadow/* primitives (no semantic equivalent)
+//   - 📱 Device UI masters (Status Bar, Home Indicator, Cursor): iOS chrome
+//     artwork — raw paints, sub-pixel radii, unstyled Time/Date/100% text.
 //
 // DOCUMENTED EXCEPTIONS — SPACING (kept raw by decision, 2026-07-18; keyed to
 //   component + property + value so the allowlist means "this value on this
-//   component is intentional", NOT "this number is always fine"):
+//   component is intentional", NOT "this number is always fine"). These are the
+//   ONLY genuine component-internal off-scale spacings — each a structural
+//   offset or visual-tuning value, not rebrandable rhythm:
 //   - Three-Dots   · itemSpacing · 6    (dot gap, visual tuning — not rhythm)
 //   - Stepper      · paddingRight · 92   (structural offset in a fixed track)
 //   - Stepper      · paddingRight · 296  (structural offset)
@@ -104,66 +155,112 @@
 //   OUT OF SCOPE — handled by the set-root / instance skips, deliberately NOT
 //   allowlisted (allowlisting them would hide real drift on those components):
 //   - Avatar 54/79 and Spinner 64 sit on their COMPONENT_SET roots — variant-
-//     arrangement chrome (purple-dashed container), never ships.
-//   - The Spinner "6px" is a nested Three-Dots INSTANCE — covered by the
-//     instance skip + the Three-Dots rule above.
-//   - The Input__dropdown 10px item gap was NOT kept — snapped to spacing/2.
+//     arrangement chrome (purple-dashed container), never ships. Same class as
+//     the Alert 31px wrap gap. The set-root skip excludes them.
+//   - The Spinner "6px" is a nested Three-Dots INSTANCE (inherits the Three-Dots
+//     master gap) — covered by the instance skip + the Three-Dots rule above.
+//   - The Input__dropdown 10px item gap was NOT kept — snapped to spacing/2 (8px).
 // ============================================================================
 
 const CONFIG = {
-  MODE: 'report',   // 'report' | 'fix'
-  SCOPE: 'file',    // 'file' (adoption lint everywhere) | 'masters' (❖ Components only)
+  MODE: 'report',       // 'report' | 'fix'  (fix never touches design surfaces)
+  SCOPE: 'file',        // 'file' (adoption lint everywhere) | 'masters' (❖ Components only)
+  SURFACES: 'all',      // 'all' | 'system' | 'designs'   — which base lint to run
+  SECTION_RHYTHM: 'gap',// 'gap'    : unbound design spacing with NO token at that
+                        //            value is reported as a TOKEN GAP, not a failure
+                        // 'strict' : it fails the design verdict too
+  TARGET: {             // WHICH SCREENS. See the A2 header.
+    mode: 'auto',       // 'auto' | 'selection' | 'ids' | 'pages'
+    ids: [],            // ['915:102', '915-102'] — both separators accepted
+    pages: [],          // exact page names
+    profile: 'auto',    // 'auto' (by page) | 'design' (force) | 'system' (skip)
+  },
 };
+
+// --- Surface classification --------------------------------------------------
+// By EXCLUSION, so it survives client files where designers name pages freely.
+// Substring match, emoji-insensitive. If a client page is misclassified, add it
+// to FORCE_DESIGN / FORCE_SYSTEM rather than loosening the regex.
+// Exclusion, NOT an allowlist: designers add pages freely in client files, and any
+// page this does not recognise must default to 'design' so new work gets checked
+// rather than silently skipped. Verified against the live page list 2026-08-06 —
+// icons / navigation / how-to-use were being misread as design surfaces.
+const SYSTEM_PAGE_RE = /components|foundations|stickersheet|cover|docs|archive|variables|rebrand|icons|navigation|how to use/i;
+// Design pages that are NOT gated. Playground is for explorations, so drift there
+// is reported but never fails — an exploration is rough on purpose. 🎨 UI Design is
+// final work ready for handoff, so it IS gated. (Fabi, 2026-08-06.)
+const UNGATED_PAGE_RE = /playground|exploration|scratch|wip|sandbox/i;
+const FORCE_DESIGN = [];   // page names to treat as design regardless
+const FORCE_SYSTEM = [];   // page names to treat as system regardless
+function surfaceOf(pageName) {
+  if (FORCE_DESIGN.some(x => x === pageName)) return 'design';
+  if (FORCE_SYSTEM.some(x => x === pageName)) return 'system';
+  // Divider pages ('-----') and any other empty page: nothing to lint either way.
+  if (/^[\s\-_=~.]+$/.test(pageName)) return 'system';
+  return SYSTEM_PAGE_RE.test(pageName) ? 'system' : 'design';
+}
+const isGated = pageName => !UNGATED_PAGE_RE.test(pageName);
+
+// --- Instance override classification (check 10) ------------------------------
+// ALLOWED = design intent. These are why instances exist; flagging them flags
+// every legitimate instance in the file.
+const OVERRIDE_ALLOW = new Set([
+  'characters', 'componentProperties', 'mainComponent', 'name',
+  'width', 'height', 'layoutSizingHorizontal', 'layoutSizingVertical',
+  'layoutGrow', 'layoutAlign', 'x', 'y', 'relativeTransform', 'constraints',
+  // Added 2026-08-06 from evidence: every Status Bar and Home Indicator on
+  // 🎨 UI Design overrides these to pin itself to the screen edge and stretch to the
+  // breakpoint width. Same family as x/y/width/height, not a design change.
+  'layoutPositioning', 'counterAxisSizingMode', 'primaryAxisSizingMode',
+]);
+// REVIEW = reported, does NOT fail the verdict. This kit expresses optional
+// elements as BOOLEAN properties, so a raw `visible` override usually means a
+// property was bypassed — but that is a hypothesis, not evidence yet.
+const OVERRIDE_REVIEW = new Set([
+  'visible', 'locked', 'expanded', 'isMask', 'explicitVariableModes',
+]);
+// Everything else FLAGS, including unrecognized field names (fail open, same
+// principle as the v2.3 patch). Note: a `fills` override flags EVEN IF it is
+// bound to a semantic token — recolouring a Button instance instead of picking
+// Style=Error is the actual failure mode, and an "is it bound?" test passes it.
+
+// --- Annotation skip (design surfaces only) ----------------------------------
+// Spec notes on a screen would flag as unstyled text forever. Constraint lives
+// in the file, not the docs: name the layer `// ...` or put it in a `Notes` frame.
+const ANNOTATION_RE = /^\s*\/\//;
+function isAnnotation(n) {
+  let a = n;
+  while (a && a.type !== 'PAGE') {
+    if (ANNOTATION_RE.test(a.name) || /^notes$/i.test(a.name)) return true;
+    a = a.parent;
+  }
+  return false;
+}
+
+// --- The spacing scale, for the design-surface spacing check ------------------
+// EXTENDED 2026-08-06: spacing/14=56, /16=64, /20=80, /24=96 added to 1. Primitives
+// for screen-level rhythm (spacing/12=48 used to be the ceiling). Those are
+// Tailwind's next four rungs, which is what keeps the zero-translation contract.
+// Bindings to Responsive grid/margin + grid/gutter also count as bound. Unbound
+// values with no token at all land in the TOKEN GAP bucket (CONFIG.SECTION_RHYTHM).
+// KEEP IN SYNC with 1. Primitives. If a rung is added in Figma, add it here.
+const SPACING_SCALE = new Set([0,4,8,12,16,20,24,28,32,36,40,44,48,56,64,80,96]);
 
 // --- Device chrome + spacing exceptions -------------------------------------
 const DEVICE_RE = /status bar|home indicator|cursor|device ui/i;
 
 // Keyed spacing exceptions. comp/prop are regexes tested against the master
 // name and the property name; val is the exact px value. All three must match.
+// RETIRED 2026-07-31: Stepper paddingRight 92 & 296 and Progress__bar 206. They
+// were never structural offsets — each was a hardcoded progress percentage,
+// because `Fill` was FILL-sized so paddingRight on the parent Bar set its length.
+// Fixed by pinning Fill.width and zeroing the padding. If any reappear, pin the
+// width — do NOT re-allowlist.
 const SPACING_EXCEPTIONS = [
-  { comp: /Three-Dots/,    prop: /^itemSpacing$/,  val: 6,   note: 'dot gap (visual tuning)' },
-  { comp: /Stepper/,       prop: /^paddingRight$/, val: 92,  note: 'structural offset' },
-  { comp: /Stepper/,       prop: /^paddingRight$/, val: 296, note: 'structural offset' },
-  { comp: /Progress__bar/, prop: /^paddingRight$/, val: 206, note: 'structural offset' },
+  { comp: /Three-Dots/, prop: /^itemSpacing$/, val: 6, note: 'dot gap (visual tuning)' },
 ];
 function isSpacingException(compName, prop, val) {
   return SPACING_EXCEPTIONS.some(e => e.comp.test(compName) && e.prop.test(prop) && e.val === val);
-}
-
-// --- Colour / radius exceptions (v2.4) ---------------------------------------
-// NOTE: an ARTWORK_EXCEPTIONS block was drafted for v2.4 and deliberately NOT
-// shipped — see amendment (a) in the header. Flag artwork lives inside remote
-// INSTANCE nodes, which the base loop skips before check 2, so the allowlist
-// had no reachable input. Do not re-add it without first confirming that a
-// local Flag master exists on ❖ Components.
-//
-// Primitive colour bindings that are sanctioned by decision. comp and vari are
-// regexes; BOTH must match. Keyed to component + variable so the allowlist means
-// "this primitive on this component is intentional", never "this primitive is
-// always fine" — same discipline as SPACING_EXCEPTIONS.
-//
-// !! READ THIS BEFORE ASSUMING CHECK 1 IS STALE (2026-08-03) !!
-// All 62 colour primitives are now `ALL_SCOPES` — every ramp step is pickable in
-// the colour picker. That is a deliberate maintainer decision that REVERSES the
-// 2026-07-31 restriction (which had taken pickable primitives 16 → 3), and it
-// does NOT loosen this check. The rule is now split by surface:
-//   • Screen / product work — designers may pick any primitive. Scopes are open.
-//   • Kit components on ❖ Components — semantic-only, still gated here.
-// So open scopes and a strict check 1 are consistent, not contradictory. Do not
-// "reconcile" them by deleting this list or by re-closing the scopes.
-const PRIM_COLOR_EXCEPTIONS = [
-  { comp: /Stepper|Modal|Avatar|Button__circle/, vari: /^color\/primary\/(300|400)$/, note: 'mid-ramp tint' },
-  { comp: /Pagination \/ Item/,                  vari: /^color\/primary\/200$/,       note: 'mid-ramp tint' },
-  { comp: /Tooltip|Avatar/,                      vari: /^color\/neutral\/900$/,       note: 'always-dark chip pattern' },
-  { comp: /.*/,                                  vari: /^color\/overlay\//,           note: 'no semantic equivalent' },
-  { comp: /.*/,                                  vari: /^color\/shadow\//,            note: 'no semantic equivalent' },
-  // v2.4 amendment (c): Device UI chrome. iOS artwork, not rebrandable. The
-  // draft applied DEVICE_RE to checks 2–5 and overlooked check 1.
-  { comp: DEVICE_RE,                             vari: /^color\/neutral\/(0|1000)$/,  note: 'iOS device chrome' },
-];
-
-function isPrimColorException(compName, varName) {
-  return PRIM_COLOR_EXCEPTIONS.some(e => e.comp.test(compName) && e.vari.test(varName));
 }
 
 // --- Allowlists (baseline captured 2026-07-05, post-cleanup) ----------------
@@ -226,14 +323,12 @@ if (!semColl || !primColl) {
 const lightId = (semColl.modes.find(m => m.name === 'Light') || semColl.modes[0]).modeId;
 const primModeId = primColl.modes[0].modeId;
 const localVarIds = new Set(allVars.map(v => v.id));
-// v2.4 amendment (b): Tier 3 is tracked separately so check 1 can exclude it.
-// Component-tier bindings in a component are contract-correct, not violations.
-const compColl = collections.find(c => c.name === '3. Component');
-const vname = {}; const semIds = new Set(); const compIds = new Set();
+const vname = {}; const semIds = new Set(); const respIds = new Set();
+const respColl = collections.find(c => c.name === 'Responsive');
 for (const v of allVars) {
   vname[v.id] = v.name;
   if (v.variableCollectionId === semColl.id) semIds.add(v.id);
-  if (compColl && v.variableCollectionId === compColl.id) compIds.add(v.id);
+  if (respColl && v.variableCollectionId === respColl.id) respIds.add(v.id);
 }
 const localStyleIds = new Set();
 for (const s of [...await figma.getLocalTextStylesAsync(), ...await figma.getLocalPaintStylesAsync(),
@@ -247,6 +342,13 @@ async function getVarCached(id) {
   remoteVarCache.set(id, v); return v;
 }
 
+// v3.0: itemSpacing is inert when SPACE_BETWEEN, or when fewer than 2 children
+// participate in auto-layout. ABSOLUTE children (focus `Ring`) do not consume it.
+function isInertSpacing(n) {
+  if (n.primaryAxisAlignItems === 'SPACE_BETWEEN') return true;
+  const autoKids = (n.children || []).filter(c => c.layoutPositioning !== 'ABSOLUTE').length;
+  return autoKids < 2;
+}
 function insideInstance(n) { let a = n.parent; while (a && a.type !== 'PAGE') { if (a.type === 'INSTANCE') return true; a = a.parent; } return false; }
 function container(n) { let a = n, comp = null, top = null; while (a && a.type !== 'PAGE') { if (a.type === 'COMPONENT' || a.type === 'COMPONENT_SET') comp = a.name; if (a.parent && a.parent.type === 'PAGE') top = a.name; a = a.parent; } return comp ? 'MASTER:' + comp : (top || '?'); }
 function aliasEntries(bv) {
@@ -289,39 +391,31 @@ for (const v of allVars) {
 
 // =============================== A. BASE LINT ================================
 const base = { primColorBindings: {}, rawPaints: {}, hardRadius: {}, unstyledText: [], rawEffects: [],
-               hardSpacing: {}, spacingExceptions: 0,
-               primColorExceptions: 0, deviceNodesSkipped: 0 };
-const comps = figma.root.children.find(p => p.name === '❖ Components');
+               hardSpacing: {}, spacingExceptions: 0 };
+const comps = figma.root.children.find(p => /components/i.test(p.name));
+if (!comps) return { verdict: '⚠️ CONFIG ERROR — no page matching /components/i found.' };
 await comps.loadAsync();
-for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'COMPONENT') && n.parent.type !== 'COMPONENT_SET')) {
+for (const m of (CONFIG.SURFACES === 'designs' ? [] : comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'COMPONENT') && n.parent.type !== 'COMPONENT_SET'))) {
   for (const n of [m, ...m.findAll(() => true)]) {
     if (insideInstance(n)) continue;
     const bv = n.boundVariables || {};
-    // 1. primitive colour bindings — Tier 1 only. Tier 2 (Semantic) is the
-    //    design-with surface and Tier 3 (Component) is contract-correct inside
-    //    a component, so both are excluded. See v2.4 amendment (b).
     for (const b of [...(bv.fills || []), ...(bv.strokes || [])]) {
-      if (!semIds.has(b.id) && !compIds.has(b.id) && vname[b.id]) {
+      if (!semIds.has(b.id) && vname[b.id]) {
         const k = vname[b.id];
-        if (isPrimColorException(m.name, k)) { base.primColorExceptions++; continue; }
         base.primColorBindings[k] = base.primColorBindings[k] || new Set();
         base.primColorBindings[k].add(m.name);
       }
     }
-    // 2. raw paints
     const isMasterRoot = (n === m) || (n.parent && n.parent.type === 'COMPONENT_SET');
     if (!isMasterRoot) {
-      const skipDevice = DEVICE_RE.test(m.name);
       for (const kind of ['fills', 'strokes']) {
         if (!Array.isArray(n[kind])) continue;
         for (const p of n[kind]) if (p.type === 'SOLID' && p.visible !== false && !(p.boundVariables && p.boundVariables.color)) {
-          if (skipDevice) { base.deviceNodesSkipped++; continue; }
           base.rawPaints[m.name] = (base.rawPaints[m.name] || 0) + 1;
         }
       }
     }
-    // 3. hardcoded radii
-    if ('topLeftRadius' in n && n.type !== 'INSTANCE' && !DEVICE_RE.test(m.name)) {
+    if ('topLeftRadius' in n && n.type !== 'INSTANCE') {
       for (const c of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) {
         if (typeof n[c] === 'number' && n[c] > 0 && !bv[c]) {
           const k = m.name + ' (' + n[c] + 'px)';
@@ -343,26 +437,18 @@ for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'CO
       };
       for (const p of ['paddingLeft', 'paddingRight', 'paddingTop', 'paddingBottom']) if (p in n) checkSpace(n[p], p);
       if ('itemSpacing' in n && typeof n.itemSpacing === 'number') {
-        // v2.4 amendment (d): count only children that participate in layout FLOW.
-        // An ABSOLUTE child (e.g. a focus `Ring` overlay) consumes no gap, so a
-        // frame with one flow child plus one absolute child still has an inert
-        // itemSpacing. Counting raw children made every Focus variant built on
-        // 2026-08-03 report a false unbound-spacing finding — 15 of them. This
-        // is a pre-existing bug in check 6, not a consequence of the rings.
-        const flow = (n.children || []).filter(c => c.layoutPositioning !== 'ABSOLUTE');
-        const inert = n.primaryAxisAlignItems === 'SPACE_BETWEEN' || flow.length < 2;
-        if (!inert) checkSpace(n.itemSpacing, 'itemSpacing');
+        // v3.0: count AUTO-LAYOUT children only. ABSOLUTE children (e.g. the
+        // focus `Ring`) don't consume itemSpacing, so counting them made
+        // itemSpacing look active on 15 Pagination variants — same false-positive
+        // class as the v2.3 root-inheritance patch.
+        if (!isInertSpacing(n)) checkSpace(n.itemSpacing, 'itemSpacing');
       }
       if (n.layoutWrap === 'WRAP' && 'counterAxisSpacing' in n) checkSpace(n.counterAxisSpacing, 'counterAxisSpacing');
     }
-    // 4. text without a text style
-    if (n.type === 'TEXT' && !DEVICE_RE.test(m.name) &&
-        !(n.textStyleId && n.textStyleId !== '' && n.textStyleId !== figma.mixed)) {
+    if (n.type === 'TEXT' && !(n.textStyleId && n.textStyleId !== '' && n.textStyleId !== figma.mixed)) {
       base.unstyledText.push(m.name + ' > ' + n.name);
     }
-    // 5. effects without an effect style
-    if ('effects' in n && n.effects && n.effects.length > 0 && !DEVICE_RE.test(m.name) &&
-        !(n.effectStyleId && n.effectStyleId !== '')) {
+    if ('effects' in n && n.effects && n.effects.length > 0 && !(n.effectStyleId && n.effectStyleId !== '')) {
       base.rawEffects.push(m.name + ' > ' + n.name);
     }
   }
@@ -371,6 +457,345 @@ for (const k of Object.keys(base.primColorBindings)) base.primColorBindings[k] =
 base.unstyledText = [...new Set(base.unstyledText)];
 base.rawEffects = [...new Set(base.rawEffects)];
 base.hardSpacingTotal = Object.values(base.hardSpacing).reduce((a, b) => a + b, 0);
+
+// ======================= A2. DESIGN-SURFACE LINT (v3.10) =======================
+// TARGETING. Designers lint the screens they own, not the file. Four ways in:
+//   auto      — every top-level frame on every design page (the file-wide run)
+//   selection — whatever is selected in Figma (the designer's own path)
+//   ids       — node ids, '915:102' or '915-102' (paste a Figma URL's node-id)
+//   pages     — top-level frames on the named pages
+// A SCOPED RUN IS NOT A FILE RUN. The verdict echoes what was targeted, and every
+// screen gets its own result. Clean on 2 of 9 screens must never read as clean.
+//
+// PROFILE. 'auto' picks by page classification. Explicit 'design' overrides it,
+// which is how a fixture frame on the Stickersheet (a SYSTEM page) gets linted.
+//
+// NO PER-SCREEN EXCEPTION LIST, deliberately. If a screen needs an exception it is
+// a token gap or a component gap. Fix it there.
+//
+// OUTPUT. `report` is the designer-facing text: plain language, grouped by screen,
+// with a Figma link per issue. The structured data stays in `design.perScreen` for
+// tooling. Every message names the fix, not the rule.
+
+// One row per issue. `sev` decides the verdict:
+//   fail — counts against the screen
+//   gap  — counts only when CONFIG.SECTION_RHYTHM === 'strict' (needs a new token)
+//   note — never counts
+const CHECKS = {
+  detached:       { sev: 'fail', order: 1, msg: 'Not a library component. Swap it for the one from the library.' },
+  handBuilt:      { sev: 'fail', order: 2, msg: 'Looks like a control built by hand. Use the library component.' },
+  changedByHand:  { sev: 'fail', order: 3, msg: 'Component was changed by hand. Pick a variant or property instead.' },
+  lockedTheme:    { sev: 'fail', order: 4, msg: 'Locked to one theme. This will not switch to dark mode.' },
+  handColor:      { sev: 'fail', order: 5, msg: 'Color picked by hand. Use a theme color.' },
+  paletteColor:   { sev: 'fail', order: 6, msg: 'Uses a raw palette color. Use a theme color so it rebrands.' },
+  noTextStyle:    { sev: 'fail', order: 7, msg: 'Text has no text style applied.' },
+  handShadow:     { sev: 'fail', order: 8, msg: 'Shadow set by hand. Apply a shadow style.' },
+  handRadius:     { sev: 'fail', order: 9, msg: 'Corner radius typed by hand. Use a radius variable.' },
+  handSpacing:    { sev: 'fail', order: 10, msg: 'Spacing typed by hand. A variable already exists for this size.' },
+  spacingGap:     { sev: 'gap',  order: 11, msg: 'Spacing typed by hand, and no variable covers this size yet. Report it instead of fixing it.' },
+  hiddenLayer:    { sev: 'note', order: 12, msg: 'A layer inside a component was hidden. Use the component toggle instead.' },
+  namedLikeComp:  { sev: 'note', order: 13, msg: 'Frame is named after a component. Rename it, or make it an instance.' },
+};
+// Figma property names are jargon. Say what the designer sees.
+const FIELD_WORDS = {
+  fills: 'color', strokes: 'border color', strokeWeight: 'border width', strokeAlign: 'border position',
+  cornerRadius: 'corners', topLeftRadius: 'corners', topRightRadius: 'corners',
+  bottomLeftRadius: 'corners', bottomRightRadius: 'corners',
+  effects: 'shadow', opacity: 'opacity', blendMode: 'blend mode', rotation: 'rotation',
+  textStyleId: 'text style', fillStyleId: 'color style', effectStyleId: 'shadow style',
+  strokeStyleId: 'border style', fontName: 'font', fontSize: 'text size', fontWeight: 'font weight',
+  letterSpacing: 'letter spacing', lineHeight: 'line height', textCase: 'letter case',
+  textDecoration: 'underline', textAlignHorizontal: 'text alignment', paragraphSpacing: 'paragraph spacing',
+  itemSpacing: 'spacing', counterAxisSpacing: 'row spacing', layoutMode: 'layout direction',
+  paddingLeft: 'padding', paddingRight: 'padding', paddingTop: 'padding', paddingBottom: 'padding',
+  boundVariables: 'variable', clipsContent: 'clipping',
+};
+const fieldWord = f => FIELD_WORDS[f] || f;
+
+const design = { target: null, targetErrors: [], perScreen: {}, scaffoldSeen: {}, screensScanned: 0, nodesScanned: 0, instancesScanned: 0 };
+
+// Master-name index for check 11. Set names and member names.
+const masterNames = new Set();
+for (const m of comps.findAll(n => n.type === 'COMPONENT' || n.type === 'COMPONENT_SET')) masterNames.add(m.name.trim().toLowerCase());
+// Names too generic to accuse on their own. A match here becomes namedLikeComp
+// (report-only); handBuilt still catches these structurally. SHRINK this list as
+// the wrapper-naming rule lands. Do not grow it to silence findings.
+const DETACH_IGNORE = new Set(['card','header','footer','content','container','row','column',
+  'item','label','icon','group','frame','wrapper','section','list','text','image','divider']);
+
+// A semantic mode may be pinned on a TRUE screen root only. v3.0 compared against
+// the walk's starting node, so a mid-screen target made its own pinned mode look
+// legal. Page/section parentage is the only reliable test.
+function isTrueScreenRoot(n) { return !!(n.parent && (n.parent.type === 'PAGE' || n.parent.type === 'SECTION')); }
+function pageOf(n) { let a = n; while (a && a.type !== 'PAGE') a = a.parent; return a; }
+
+const FILE_KEY = (typeof figma.fileKey === 'string' && figma.fileKey) || 'Vk0disHgUAm5Z7iNQiA4V6';
+const linkTo = id => 'https://www.figma.com/design/' + FILE_KEY + '/?node-id=' + String(id).replace(':', '-');
+
+const designPages = figma.root.children.filter(p => surfaceOf(p.name) === 'design');
+
+// --- resolve targets ---------------------------------------------------------
+async function resolveTargets() {
+  const T = CONFIG.TARGET, out = [];
+  const push = (n, explicit) => {
+    if (!n) return;
+    if (n.type === 'PAGE') { design.targetErrors.push('That is a whole page (' + n.name + '). Use TARGET.mode "pages".'); return; }
+    // A SECTION is organisational chrome, not a screen. The screens are inside it.
+    // Without this, 'pages' mode made the section itself the screen and every frame
+    // in it a mid-screen node, which breaks the screen-root rules (see check 12).
+    if (n.type === 'SECTION') { for (const c of n.children) push(c, false); return; }
+    // A CONNECTOR has no findAll, so making it a target crashed the walk before it
+    // started (v3.8 skipped connectors INSIDE the walk but still targeted them).
+    if (typeof n.findAll !== 'function') { design.targetErrors.push('Skipped ' + n.type + ' "' + n.name + '" — not a container, so it cannot be a screen.'); return; }
+    // An instance is a component usage, not a screen. Only honour one if it was
+    // named explicitly (selection / ids); never when auto-discovered from a page.
+    if (n.type === 'INSTANCE' && !explicit) { design.targetErrors.push('Skipped "' + n.name + '" — that is a component placed on the page, not a screen.'); return; }
+    if (insideInstance(n)) {
+      // Hand-changes are recorded on the outermost component, outside this subtree,
+      // so a target inside a component can only under-report. Refuse it.
+      design.targetErrors.push('Skipped "' + n.name + '" — it sits inside a component. Select the component itself, or the whole screen.');
+      return;
+    }
+    const pg = pageOf(n);
+    if (!pg) { design.targetErrors.push('Skipped "' + n.name + '" — could not find its page.'); return; }
+    const profile = T.profile === 'auto' ? surfaceOf(pg.name) : T.profile;
+    if (profile !== 'design') { design.targetErrors.push('Skipped "' + n.name + '" on ' + pg.name + ' — that is a system page, not a design screen. Set TARGET.profile "design" to check it anyway.'); return; }
+    out.push({ node: n, pageName: pg.name });
+  };
+  if (T.mode === 'selection') {
+    const sel = figma.currentPage.selection;
+    if (!sel.length) design.targetErrors.push('Nothing is selected. Select the screens to check, then run again.');
+    for (const n of sel) push(n, true);
+  } else if (T.mode === 'ids') {
+    if (!T.ids.length) design.targetErrors.push('No node ids given in TARGET.ids.');
+    for (const raw of T.ids) {
+      const id = String(raw).replace('-', ':');
+      let n = null; try { n = await figma.getNodeByIdAsync(id); } catch (err) {}
+      if (!n) { design.targetErrors.push('Could not find ' + raw + ' in this file.'); continue; }
+      await pageOf(n).loadAsync();
+      push(n, true);
+    }
+  } else if (T.mode === 'pages') {
+    if (!T.pages.length) design.targetErrors.push('No page names given in TARGET.pages.');
+    for (const nm of T.pages) {
+      const pg = figma.root.children.find(p => p.name === nm);
+      if (!pg) { design.targetErrors.push('No page named exactly "' + nm + '".'); continue; }
+      await pg.loadAsync();
+      for (const c of pg.children) push(c, false);
+    }
+  } else {
+    for (const pg of designPages) { await pg.loadAsync(); for (const c of pg.children) push(c, false); }
+  }
+  return out;
+}
+
+// --- per-screen lint ---------------------------------------------------------
+async function lintScreen(root, pageName) {
+  const items = [];
+  const add = (check, node, where, detail) => items.push({
+    check, layer: where || node.name, nodeId: node.id, link: linkTo(node.id), detail: detail || '',
+  });
+
+  for (const n of [root, ...root.findAll(() => true)]) {
+    if (isAnnotation(n)) continue;
+    if (n.type === 'CONNECTOR' || n.type === 'WIDGET' || n.type === 'STICKY') continue;  // board furniture
+
+    // ---- 10. hand-changes on a component. Top-level components only: the
+    //      override list reports nested layer ids, so one read covers all depths.
+    if (n.type === 'INSTANCE' && !insideInstance(n)) {
+      design.instancesScanned++;
+      let mcName = n.name, mcKey = null, setKey = null;
+      try {
+        const mc = await n.getMainComponentAsync();
+        if (mc) {
+          const inSet = mc.parent && mc.parent.type === 'COMPONENT_SET';
+          mcName = (inSet ? mc.parent.name + ' / ' : '') + mc.name;
+          mcKey = mc.key; setKey = inSet ? mc.parent.key : null;
+        }
+      } catch (err) {}
+      // SCAFFOLDING SKIP, by component KEY not by layer name. Annotation blocks,
+      // Group Marker, Status Bar and the '_ 🔒' template furniture are MEANT to be
+      // filled in by hand, so their overrides are intent, not drift. Keys cannot be
+      // renamed by a designer; names can, which is why the earlier name-prefix idea
+      // was wrong. Unrecognised kinds are logged to design.scaffoldSeen so the list
+      // grows from evidence instead of guesswork.
+      const sanctioned = (mcKey && SANCTIONED_COMPONENT_KEYS.has(mcKey)) || (setKey && SANCTIONED_COMPONENT_KEYS.has(setKey));
+      design.scaffoldSeen[mcName] = design.scaffoldSeen[mcName] ||
+        { count: 0, sanctioned, memberKey: mcKey, setKey };
+      design.scaffoldSeen[mcName].count++;
+      if (sanctioned) continue;
+      for (const o of (n.overrides || [])) {
+        let tgt = null;
+        try { tgt = await figma.getNodeByIdAsync(o.id); } catch (err) {}
+        const onName = tgt ? tgt.name : '';
+        const where = mcName + (onName && onName !== mcName ? ' › ' + onName : '');
+        for (const fld of (o.overriddenFields || [])) {
+          if (OVERRIDE_ALLOW.has(fld)) continue;
+          // 'boundVariables' as one flag is useless: it fires whether someone rebound
+          // a fill (drift) or bound `visible` to a Responsive breakpoint variable —
+          // the template's own show/hide mechanism, present on all six Device UI
+          // instances on 🎨 UI Design. Resolve which property actually changed.
+          if (fld === 'boundVariables') {
+            const ib = (tgt && tgt.boundVariables) || {};
+            for (const prop of Object.keys(ib)) {
+              const arr = Array.isArray(ib[prop]) ? ib[prop] : [ib[prop]];
+              const ids = arr.filter(x => x && x.id).map(x => x.id);
+              if (!ids.length) continue;
+              if (prop === 'visible' && ids.every(id => respIds.has(id))) continue;
+              add('changedByHand', n, where, fieldWord(prop) + ' rebound to a variable');
+            }
+            continue;
+          }
+          // A color change flags even when it points at a theme color. Recolouring
+          // a Button instead of choosing Style=Error is the failure being caught.
+          add(OVERRIDE_REVIEW.has(fld) ? 'hiddenLayer' : 'changedByHand', n, where, fieldWord(fld) + ' changed');
+        }
+      }
+    }
+    // v3.10, found by the first real run: `insideInstance` only inspects ANCESTORS,
+    // so an instance ROOT fell through to checks 1-6 and was judged on properties it
+    // INHERITS from its master. On 🎨 UI Design that produced 8 findings for Status
+    // Bar / Home Indicator padding (2px, 6px, 10px, 26px, 574px) which live in the
+    // Device UI masters, are deliberately exempt there, and cannot be fixed from a
+    // screen. An instance is judged ONLY by check 10, on what was actually changed.
+    // Nothing is lost: a real fill override still surfaces as 'color changed'.
+    if (n.type === 'INSTANCE' || insideInstance(n)) continue;
+    design.nodesScanned++;
+    const bv = n.boundVariables || {};
+
+    // ---- 12. theme locked below the screen root ----
+    if ((n.explicitVariableModes || {})[semColl.id] && !isTrueScreenRoot(n)) add('lockedTheme', n);
+
+    // ---- 11. detached / hand-built control. FAILS the screen (2026-08-06).
+    //      Name matching alone cannot carry a failing verdict: it accuses wrapper
+    //      frames named after components, and misses any detachment that was
+    //      renamed. So two detectors plus a report-only bucket.
+    if ((n.type === 'FRAME' || n.type === 'GROUP') && n !== root) {
+      const nm = n.name.trim().toLowerCase().split(/\s+(?=[a-z-]+=)/)[0];
+      const nameHit = masterNames.has(nm);
+      if (nameHit && !DETACH_IGNORE.has(nm)) add('detached', n);
+      else if (nameHit) add('namedLikeComp', n);
+      else {
+        // Structural fingerprint, survives a rename. Cheap gates FIRST — findAll
+        // inside the walk is O(n^2) and must run on very few nodes.
+        const paintBound = (bv.fills && bv.fills.length) || (bv.strokes && bv.strokes.length);
+        const radiusBound = bv.cornerRadius || bv.topLeftRadius || bv.topRightRadius || bv.bottomLeftRadius || bv.bottomRightRadius;
+        if (paintBound && radiusBound && typeof n.height === 'number' && n.height <= 200) {
+          const kids = n.findAll(() => true);
+          if (kids.some(k => k.type === 'TEXT' || k.type === 'VECTOR' || k.type === 'BOOLEAN_OPERATION') && !kids.some(k => k.type === 'INSTANCE')) add('handBuilt', n);
+        }
+      }
+    }
+    // ---- 1. palette colors where a theme color belongs ----
+    for (const b of [...(bv.fills || []), ...(bv.strokes || [])]) {
+      if (!semIds.has(b.id) && vname[b.id]) add('paletteColor', n, null, vname[b.id]);
+    }
+    // ---- 2. hand-picked colors. NO root exemption on a screen: a screen's own
+    //      fill is the page background and must use the theme background color.
+    for (const kind of ['fills', 'strokes']) {
+      if (!Array.isArray(n[kind])) continue;
+      for (const pt of n[kind]) {
+        if (pt.type === 'SOLID' && pt.visible !== false && !(pt.boundVariables && pt.boundVariables.color)) add('handColor', n, null, kind === 'fills' ? 'fill' : 'border');
+      }
+    }
+    // ---- 3. hand-typed corners ----
+    if ('topLeftRadius' in n) {
+      const seen = new Set();
+      for (const c of ['topLeftRadius','topRightRadius','bottomLeftRadius','bottomRightRadius']) {
+        if (typeof n[c] === 'number' && n[c] > 0 && !bv[c] && !seen.has(n[c])) { seen.add(n[c]); add('handRadius', n, null, n[c] + 'px'); }
+      }
+    }
+    // ---- 4 / 5. text style, shadow style ----
+    if (n.type === 'TEXT' && !(n.textStyleId && n.textStyleId !== '' && n.textStyleId !== figma.mixed)) add('noTextStyle', n);
+    if ('effects' in n && n.effects && n.effects.length > 0 && !(n.effectStyleId && n.effectStyleId !== '')) add('handShadow', n);
+    // ---- 6. spacing. Screen spacing must use a variable, same as components.
+    //      Split by whether a variable exists at that size, so the output is a fix
+    //      list plus a short list of sizes the system does not cover yet.
+    //      Responsive grid/margin + grid/gutter count as covered.
+    if ('layoutMode' in n && n.layoutMode !== 'NONE') {
+      const checkD = (val, prop) => {
+        // 0 is NOT checked. Considered and reverted 2026-08-06: spacing/0 exists,
+        // but 0 stays 0 under every brand, so binding it buys nothing, and a screen
+        // carries a 0 on most padding sides — 14 findings to 3 real ones in a test
+        // render. Do not re-enable without new evidence.
+        if (typeof val !== 'number' || val <= 0 || bv[prop]) return;
+        add(SPACING_SCALE.has(val) ? 'handSpacing' : 'spacingGap', n, null, fieldWord(prop) + ' ' + val + 'px');
+      };
+      for (const pr of ['paddingLeft','paddingRight','paddingTop','paddingBottom']) if (pr in n) checkD(n[pr], pr);
+      if ('itemSpacing' in n && typeof n.itemSpacing === 'number' && !isInertSpacing(n)) checkD(n.itemSpacing, 'itemSpacing');
+      if (n.layoutWrap === 'WRAP' && 'counterAxisSpacing' in n) checkD(n.counterAxisSpacing, 'counterAxisSpacing');
+    }
+  }
+
+  // dedupe identical layer+check+detail rows
+  const seenRow = new Set();
+  const rows = items.filter(r => { const k = r.check + '|' + r.nodeId + '|' + r.detail; if (seenRow.has(k)) return false; seenRow.add(k); return true; });
+  const counts = {};
+  for (const r of rows) counts[r.check] = (counts[r.check] || 0) + 1;
+  const strict = CONFIG.SECTION_RHYTHM === 'strict';
+  const fails = rows.filter(r => CHECKS[r.check].sev === 'fail' || (strict && CHECKS[r.check].sev === 'gap')).length;
+  const notes = rows.length - fails;
+  return { rows, counts, fails, notes, gated: isGated(pageName),
+           verdict: fails === 0 ? 'no issues' : fails + (isGated(pageName) ? ' to fix' : ' to look at (exploration, not gating)') };
+}
+
+const targets = CONFIG.SURFACES === 'system' ? [] : await resolveTargets();
+design.target = { mode: CONFIG.TARGET.mode, profile: CONFIG.TARGET.profile, resolved: targets.map(t => t.pageName + ' | ' + t.node.name) };
+for (const t of targets) { design.screensScanned++; design.perScreen[t.pageName + ' | ' + t.node.name] = await lintScreen(t.node, t.pageName); }
+
+// --- designer-facing report ---------------------------------------------------
+// Grouped by screen, then by issue. Max 6 examples per issue so one bad screen
+// cannot bury the rest; the count still shows the real total.
+function buildReport() {
+  const keys = Object.keys(design.perScreen);
+  const L = [];
+  const nFail = keys.filter(k => design.perScreen[k].fails > 0).length;
+  L.push('DESIGN CHECK');
+  if (!keys.length) {
+    L.push('');
+    L.push('No screens were checked. This is not a pass.');
+    for (const e of design.targetErrors) L.push('  - ' + e);
+    return L.join('\n');
+  }
+  L.push(nFail === 0 ? 'All ' + keys.length + ' screen(s) look good.' : nFail + ' of ' + keys.length + ' screen(s) need fixes.');
+  const untargeted = designPages.map(p => p.name).filter(nm => !keys.some(k => k.indexOf(nm + ' | ') === 0));
+  if (untargeted.length) L.push('Only the screens listed below were checked. Not checked: ' + untargeted.join(', ') + '.');
+
+  for (const k of keys) {
+    const s = design.perScreen[k];
+    const screenName = k.split(' | ').slice(1).join(' | ');
+    L.push('');
+    L.push('--------------------------------------------------');
+    const flag = s.fails === 0 ? 'OK   ' : (s.gated ? 'FIX  ' : 'NOTE ');
+    L.push(flag + screenName + '   (' + s.verdict + ')');
+    const byCheck = {};
+    for (const r of s.rows) (byCheck[r.check] = byCheck[r.check] || []).push(r);
+    const order = Object.keys(byCheck).sort((a, b) => CHECKS[a].order - CHECKS[b].order);
+    for (const c of order) {
+      const rs = byCheck[c];
+      const tag = CHECKS[c].sev === 'fail' ? '' : (CHECKS[c].sev === 'gap' ? '  [needs a new variable]' : '  [just so you know]');
+      L.push('');
+      L.push('  ' + CHECKS[c].msg + '  (' + rs.length + ')' + tag);
+      for (const r of rs.slice(0, 6)) L.push('    - ' + r.layer + (r.detail ? '  -  ' + r.detail : '') + '\n        ' + r.link);
+      if (rs.length > 6) L.push('    - and ' + (rs.length - 6) + ' more of the same');
+    }
+  }
+  const unknown = Object.keys(design.scaffoldSeen).filter(k => !design.scaffoldSeen[k].sanctioned);
+  if (unknown.length) {
+    L.push('');
+    L.push('--------------------------------------------------');
+    L.push('Components checked for hand-changes (not template scaffolding):');
+    for (const k of unknown) L.push('  - ' + k + '  x' + design.scaffoldSeen[k].count);
+  }
+  if (design.targetErrors.length) {
+    L.push('');
+    L.push('--------------------------------------------------');
+    L.push('Could not check:');
+    for (const e of design.targetErrors) L.push('  - ' + e);
+  }
+  return L.join('\n');
+}
+
 
 // ============================ B. ADOPTION LINT ================================
 const adoption = {
@@ -411,10 +836,11 @@ for (const page of pages) {
           }
         } catch (err) { /* fall through to flag */ }
       }
-
       const key = loc + ' | ' + v.name + ' @' + e.prop + (inInst ? ' [in-instance]' : '');
       adoption.flaggedVars[key] = (adoption.flaggedVars[key] || 0) + 1;
-      if (CONFIG.MODE === 'fix' && !inInst) {
+      // v3.0: fix mode is SYSTEM-SURFACE ONLY. Rebinding inside a screen is a
+      // design act, not a value-identical repair.
+      if (CONFIG.MODE === 'fix' && !inInst && surfaceOf(page.name) === 'system') {
         const val = await resolveVal(v, Object.keys(v.valuesByMode)[0]);
         const matches = localIndex[v.resolvedType + '|' + valKey(val, v.resolvedType)] || [];
         const sem = matches.filter(x => x.tier === 'semantic');
@@ -464,187 +890,44 @@ for (const page of pages) {
   }
 }
 
-// ========================== C. STRUCTURAL CHECKS (v2.4) =======================
-// Five cheap checks added 2026-08-03. Each is countable and independent of the
-// base/adoption machinery above.
-
-// --- 10. State coverage -------------------------------------------------------
-// CONTRACT, amended 2026-08-03: there is no mandatory five-state set. Required
-// states are per component and depend on whether it is interactive. Focus is
-// mandatory for anything focusable — WCAG 2.4.7 Level AA — and is therefore the
-// only state this check GATES on. Hover, Active and Disabled are design
-// decisions with no criterion behind them; they are counted under `tracked` so
-// the number stays visible without blocking a release. A non-interactive
-// component carries no states at all and belongs in NO_INTERACTION below.
-//
-// The handoff frames on ❖ Components were updated to match this: the old
-// "five states — default / hover / active / focus / disabled" gate language
-// claimed a bar the kit did not meet on 9 sets and was ticked as passing.
-const EXPECTED_STATES = ['Default', 'Hover', 'Active', 'Focus', 'Disabled'];
-
-// Sets that legitimately have no interaction states. Matched against the name
-// with any `.🔒master / ` style prefix stripped. Anchored so that `Pagination`
-// does NOT match `Pagination / Item` and `Breadcrumb` does NOT match
-// `Breadcrumb / Item` — the wrappers are static, the Items are interactive.
-const NO_INTERACTION = [
-  /^Avatar$/, /^Badge$/, /^Separator$/, /^Spinner$/, /^Spinner-Gradient$/,
-  /^Three-Dots$/, /^Squares$/, /^Alert$/, /^Toast$/, /^Modal$/, /^Tooltip$/,
-  /^List$/, /^List Item$/, /^Breadcrumb$/, /^Stepper$/, /^Stepper Item$/,
-  /^Pagination$/, /^Form$/, /^Bubble$/, /^Message$/, /^Standard Icon$/,
-  /^Cursor$/, /^Status Bar$/, /^Home Indicator$/, /^Organization \/ Status Badge$/,
-  // Tabs is a wrapper like Pagination and Breadcrumb: every interaction state
-  // lives on `.🔒master / Tabs / Item`, which is checked on its own and has all
-  // five. Anchored so it does NOT match `Tabs / Item`. Added 2026-08-03.
-  /^Tabs$/,
-];
-
-// Sets whose Focus lives on a PARENT control rather than on themselves.
-// Recorded here rather than in a doc so the check cannot drift from the call.
-const FOCUS_DELEGATED = [
-  { set: /^Input__dropdown \/ Item$/, to: 'Input__dropdown',
-    note: 'Decision 2026-08-03. The trigger is the tabbable element and carries the ring. ' +
-          'A list row\'s focus treatment is a background change identical to its existing ' +
-          'Hover (shadcn SelectItem uses focus:bg-accent, not a ring), so an Item Focus ' +
-          'variant would duplicate Hover without adding information.' },
-  { set: /^Input__number$/, to: 'Button__circle',
-    note: 'Decision 2026-08-03. The composite has NO focusable host: it is ' +
-          '[Button__circle, TEXT, Button__circle] and the middle element is a static TEXT ' +
-          'node, not an editable field. The only focusable targets are the two ' +
-          'Button__circle instances, which already ship State=Focus. A container ring was ' +
-          'built and then removed — it implied a focusable container that does not exist, ' +
-          'and any composite-level Focus variant would force an arbitrary choice about ' +
-          'which of the two buttons is focused.' },
-];
-const shortName = n => n.replace(/^\.[^/]*\/\s*/, '').trim();
-
-const stateCoverage = { focusGaps: [], otherGaps: [], noStateProperty: [], delegated: [], skipped: 0, checked: 0 };
-for (const s of comps.findAllWithCriteria({ types: ['COMPONENT_SET'] })) {
-  const sn = shortName(s.name);
-  if (NO_INTERACTION.some(r => r.test(sn))) { stateCoverage.skipped++; continue; }
-  const del = FOCUS_DELEGATED.find(x => x.set.test(sn));
-  const defs = s.componentPropertyDefinitions || {};
-  const key = Object.keys(defs).find(k => /^(State|Status)$/i.test(k.split('#')[0]));
-  if (!key) { stateCoverage.noStateProperty.push(s.name); continue; }
-  stateCoverage.checked++;
-  const have = defs[key].variantOptions || [];
-  const missing = EXPECTED_STATES.filter(e => !have.some(h => h.toLowerCase() === e.toLowerCase()));
-  if (missing.indexOf('Focus') !== -1) {
-    if (del) stateCoverage.delegated.push(s.name + ' → Focus on ' + del.to);
-    else stateCoverage.focusGaps.push(s.name + ' [' + key + ': ' + have.join('|') + ']');
-  }
-  const others = missing.filter(x => x !== 'Focus');
-  if (others.length) stateCoverage.otherGaps.push(s.name + ' missing ' + others.join(', '));
-  // casing drift: a value that matches an expected state case-insensitively but not exactly
-  const caseOdd = have.filter(h => EXPECTED_STATES.some(e => e.toLowerCase() === h.toLowerCase() && e !== h));
-  if (caseOdd.length) stateCoverage.otherGaps.push(s.name + ' CASING: ' + caseOdd.join(', '));
-}
-
-// --- 11. Description completeness --------------------------------------------
-// Report-only. Make the number countable; fixing the descriptions is separate work.
-const descriptions = { total: 0, filled: 0, empty: [] };
-for (const s of comps.findAllWithCriteria({ types: ['COMPONENT_SET'] })) {
-  if (/^\.util\//.test(s.name)) continue;
-  descriptions.total++;
-  if ((s.description || '').trim() === '') descriptions.empty.push(s.name);
-  else descriptions.filled++;
-}
-descriptions.emptyCount = descriptions.empty.length;
-
-// --- 12. Token export readiness ----------------------------------------------
-// Every Semantic variable needs codeSyntax.WEB, and it must equal
-// `var(--<variable name>)`. Asserting the exact string catches typos, not just
-// absence — three tokens shipped with no codeSyntax at all on 2026-07-31.
-const exportReadiness = { missing: [], wrong: [], ok: 0 };
-for (const v of allVars.filter(x => x.variableCollectionId === semColl.id)) {
-  const cs = (v.codeSyntax || {}).WEB;
-  const want = 'var(--' + v.name + ')';
-  if (!cs) exportReadiness.missing.push(v.name);
-  else if (cs !== want) exportReadiness.wrong.push(v.name + ' → "' + cs + '" (want "' + want + '")');
-  else exportReadiness.ok++;
-}
-
-// --- 13. Published-surface sanity --------------------------------------------
-// No variable a consumer needs may be hiddenFromPublishing. Per collection,
-// either everything publishes or the exception is on this list.
-const EXPECTED_HIDDEN = [/^font\/vertical-rhythm$/, /^font\/family\/base$/, /^font\/size\/base$/, /^grid\/columns$/];
-const publishedSurface = { unexpectedHidden: [], expectedHiddenPresent: [], byCollection: {} };
-for (const c of collections) {
-  const vs = allVars.filter(v => v.variableCollectionId === c.id);
-  const hidden = vs.filter(v => v.hiddenFromPublishing);
-  publishedSurface.byCollection[c.name] = { total: vs.length, hidden: hidden.length };
-  for (const v of hidden) {
-    if (EXPECTED_HIDDEN.some(r => r.test(v.name))) publishedSurface.expectedHiddenPresent.push(v.name);
-    else publishedSurface.unexpectedHidden.push(c.name + ' | ' + v.name);
-  }
-}
-
-// --- 14. Frame mode-pin -------------------------------------------------------
-// Any frame meant to display a fixed mode must pin BOTH `2. Semantic` and
-// `3. Component`. Pinning one and not the other is the failure: it is
-// value-identical today, because every Component token resolves the same in
-// both modes, but the first mode-specific component token would silently fail
-// to switch. Collection IDs are looked up by name, never hardcoded.
-const modePins = { halfPinned: [], bothPinned: 0, scanned: 0 };
-if (compColl) {
-  for (const pg of figma.root.children) {
-    await pg.loadAsync();
-    for (const n of pg.findAllWithCriteria({ types: ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'SECTION'] })) {
-      const em = n.explicitVariableModes; if (!em) continue;
-      const hasSem = Object.prototype.hasOwnProperty.call(em, semColl.id);
-      const hasComp = Object.prototype.hasOwnProperty.call(em, compColl.id);
-      if (!hasSem && !hasComp) continue;
-      modePins.scanned++;
-      if (hasSem && hasComp) modePins.bothPinned++;
-      else modePins.halfPinned.push(pg.name + ' | ' + n.name + ' | pins ' + (hasSem ? 'Semantic only' : 'Component only'));
-    }
-  }
-}
-
-const structuralClean =
-  stateCoverage.focusGaps.length === 0 &&
-  stateCoverage.noStateProperty.length === 0 &&
-  exportReadiness.missing.length === 0 &&
-  exportReadiness.wrong.length === 0 &&
-  publishedSurface.unexpectedHidden.length === 0 &&
-  modePins.halfPinned.length === 0;
-
 const clean = Object.keys(adoption.flaggedVars).length === 0 &&
               Object.keys(adoption.danglingVars).length === 0 &&
               Object.keys(adoption.flaggedStyles).length === 0 &&
               Object.keys(adoption.flaggedRemoteInstances).length === 0;
 const spacingClean = Object.keys(base.hardSpacing).length === 0;
-const baseClean = Object.keys(base.primColorBindings).length === 0 &&
-                  Object.keys(base.rawPaints).length === 0 &&
-                  Object.keys(base.hardRadius).length === 0 &&
-                  base.unstyledText.length === 0 &&
-                  base.rawEffects.length === 0;
+
+// v3.0: THREE verdicts, deliberately not folded into one. The publish gate reads
+// the adoption + spacing verdicts; a red DESIGN verdict must not be able to dirty
+// the clean-file baseline those two represent.
+const screenKeys = Object.keys(design.perScreen);
+// Only GATED screens can fail the run. Ungated pages (Playground / explorations)
+// still get a full report so drift is visible early; they just do not block.
+const failed = screenKeys.filter(k => design.perScreen[k].gated && design.perScreen[k].fails > 0);
+const designFails = screenKeys.filter(k => design.perScreen[k].gated).reduce((a, k) => a + design.perScreen[k].fails, 0);
+// A scoped run is not a file run. The verdict states the scope every time, and
+// names the pages that exist but were NOT targeted, so a partial pass cannot be
+// read as a file pass.
+const notTargeted = designPages.map(p => p.name).filter(nm => !screenKeys.some(k => k.indexOf(nm + ' | ') === 0));
+const designVerdict = design.screensScanned === 0
+  ? '➖ NO SCREENS CHECKED (target mode "' + CONFIG.TARGET.mode + '") — this is NOT a pass. ' +
+    (design.targetErrors.length ? design.targetErrors.length + ' target error(s), see designReport.' : designPages.length + ' design page(s) hold 0 top-level frames.')
+  : (designFails === 0
+      ? '✅ ' + design.screensScanned + '/' + design.screensScanned + ' TARGETED SCREEN(S) PASS' + (notTargeted.length ? ' — SCOPED RUN, untargeted design pages: ' + notTargeted.join(', ') : '')
+      : '⚠️ ' + failed.length + '/' + design.screensScanned + ' TARGETED SCREEN(S) FAIL — ' + designFails + ' finding(s)');
+const designReport = buildReport();
+
 return {
   verdict: clean ? '✅ ADOPTION CLEAN — no unsanctioned foreign material' : '⚠️ FOREIGN MATERIAL FLAGGED',
-  baseVerdict: baseClean
-    ? '✅ BASE CLEAN — no unbound colour, radius, text style or effect outside documented exceptions'
-    : '⚠️ BASE FINDINGS — see base.*',
   spacingVerdict: spacingClean
     ? '✅ SPACING BOUND — no unbound spacing outside documented exceptions'
     : '⚠️ UNBOUND SPACING FOUND — ' + base.hardSpacingTotal + ' node-props',
-  structuralVerdict: structuralClean
-    ? '✅ STRUCTURE CLEAN — no Focus gaps, export ready, publish surface sane, mode pins complete'
-    : '⚠️ STRUCTURAL FINDINGS — ' + stateCoverage.focusGaps.length + ' Focus gap(s), '
-      + (exportReadiness.missing.length + exportReadiness.wrong.length) + ' export issue(s), '
-      + publishedSurface.unexpectedHidden.length + ' unexpected hidden, '
-      + modePins.halfPinned.length + ' half-pinned frame(s)',
-  exceptionsApplied: {
-    spacing: base.spacingExceptions,
-    primitiveColour: base.primColorExceptions,
-    deviceChrome: base.deviceNodesSkipped,
-  },
-  // Tracked, NOT gated: Hover/Active coverage and empty descriptions are
-  // countable numbers for F1/F2 planning, not v1.0 blockers.
-  tracked: {
-    hoverActiveGaps: stateCoverage.otherGaps.length,
-    emptyDescriptions: descriptions.emptyCount + ' of ' + descriptions.total,
-  },
+  designVerdict,
+  designReport,        // <- give THIS to the designer. Plain text, plain language.
+  designScreens: Object.fromEntries(screenKeys.map(k => [k, design.perScreen[k].verdict])),
+  designTargetErrors: design.targetErrors,
+  designPages: designPages.map(p => p.name),
   nodesScanned,
   base,
+  design,
   adoption,
-  structural: { stateCoverage, descriptions, exportReadiness, publishedSurface, modePins },
 };
