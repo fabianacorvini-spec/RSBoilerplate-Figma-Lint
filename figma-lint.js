@@ -1,5 +1,5 @@
 // ============================================================================
-// Component lint v2.7 — base property lint + FOREIGN-BINDING ADOPTION LINT
+// Component lint v2.8 — base property lint + FOREIGN-BINDING ADOPTION LINT
 // Run via the MCP Bridge plugin — ask Claude to fetch this raw file and run it.
 // Report mode is read-only; fix mode rebinds only value-identical foreign
 // bindings.
@@ -9,7 +9,25 @@
 //   key is DEAD, as is TcBQLQQCBO3RzDduDnYfUN. Verify figma.fileKey before use.
 //
 // ---------------------------------------------------------------------------
+// v2.8 changes vs v2.7 (2026-09-07) — one allowlist entry, no logic changes
+//   (A) SANCTIONED_VAR_KEYS += ad1ad5639b2a3cec8fd6b481a6f259cf0df1035b
+//       (`Colors/tertiary/green`). Closed the only finding in the first full
+//       9-page gate run: 28 flagged bindings, every one the same remote
+//       variable on a frame named `Figma` five levels inside the `Header`
+//       doc-chrome instance. PROVISIONAL — see the entry for why.
+//   (B) DOCUMENTED-EXCEPTIONS header block trimmed. This was made in a
+//       working copy on 2026-09-07 and never reached the public repo, so
+//       public v2.7 and this file disagreed on paper. Folded in here so one
+//       version is canonical. NOTE: that block is a TRIAGE COMMENT, not
+//       logic — there is no code-level colour allowlist. Base check 1 is
+//       `if (semIds.has(b.id) || compIds.has(b.id)) continue;` and every
+//       off-tier binding is reported. Trimming it changes what a human
+//       waves through, nothing the script does.
+//
 // v2.7 changes vs v2.6 (2026-09-07) — one bug fix, no new checks
+//   (B) DOCUMENTED-EXCEPTIONS LIST TRIMMED to color/overlay/* + color/shadow/*
+//       and the flag illustrations. primary/200, /300, /400 and neutral/900
+//       are REVOKED — verified absent from all masters 2026-09-07.
 //   (A) COMPOSE_COLOR resolution in resolveVal() + valKey() hardening. Figma's
 //       composed-color variables (alias + alpha) were unresolvable, hashed to
 //       NaN, and collided in localIndex — the table fix mode reads to decide
@@ -107,11 +125,24 @@
 //   Fix mode does NOT touch spacing.
 //
 // DOCUMENTED EXCEPTIONS — COLOR/RADIUS (do not "fix"):
-//   - primary/300, primary/400 mid-ramp tints (Stepper, Dialog placeholder,
-//     Avatar, Button__circle focus ring); primary/200 on Pagination Item
-//   - neutral/900 on Tooltip surface + Avatar (always-dark chip pattern)
+//   v2.7 TRIMMED THE LIST. An unfiltered scan of every ❖ Components master
+//   (6,851 nodes, 2026-09-07) found exactly ONE primitive colour binding in
+//   the whole file: color/overlay/50 on Scrim. Every other entry below had
+//   already been cleared and was sitting here as a hole — a stale allowlist
+//   silently ACCEPTS a binding a designer reintroduces. Re-verify before
+//   adding anything back.
+//   - color/overlay/* + color/shadow/* primitives (no semantic equivalent —
+//     shadcn has no overlay variable; settled 2026-09-07, do not reopen
+//     without a mode-dependent scrim requirement). Live: overlay/50 on Scrim.
 //   - Flags + Select flag illustration (literal colors)
-//   - color/overlay/* + color/shadow/* primitives (no semantic equivalent)
+//   REVOKED — these are now REAL findings if they reappear:
+//   - primary/200 (was Pagination Item) — cleared
+//   - primary/300 (was Avatar) — cleared by the 2026-07-30 de-primitivisation;
+//     primary/300 now has exactly one consumer, the primary-muted-active
+//     token (Light), added 2026-09-07
+//   - primary/400 (was Stepper, Dialog placeholder, Button__circle focus
+//     ring) — cleared
+//   - neutral/900 (was Tooltip surface + Avatar, "always-dark chip") — cleared
 //   - 📱 Device UI masters (Status Bar, Home Indicator, Cursor). Two PERMANENT
 //     exceptions, both decided 2026-08-14 — these will never be "fixed":
 //       (i)  Status Bar's sub-pixel battery artwork radii 4.3 / 3.25 / 2.5 / 1.5
@@ -171,6 +202,25 @@ const SANCTIONED_VAR_KEYS = new Set([
   // instance ROOT is not "inside an instance". Fix (d) also covers this, but the
   // key is listed so a root-level binding is sanctioned on its own merits.
   '9e953ab4f73edfb659c6b5f74adc04b76ae46bfe',
+  // added v2.8 (2026-09-07) — `Colors/tertiary/green`, a foreign-library
+  // colour on a 94x23 frame named `Figma` (an ELLIPSE + a TEXT `Headline`)
+  // nested five levels inside the remote `Header` doc-chrome component,
+  // whose own key 03b9ebb2757… is already sanctioned below. 28 occurrences,
+  // one per section-header banner on ❖ Components. Not designer drift: no
+  // instance overrides the node (`isLocalOverride: false`), and the main
+  // component does not carry the binding either, so all three existing
+  // sanction paths miss it — the component is allowlisted, the variable was
+  // not, and the binding sits on a descendant rather than the instance root.
+  //
+  // ⚠️ PROVISIONAL. This suppresses a report; it does not fix the file. A
+  // foreign brand mark still renders in the doc chrome of a template headed
+  // for client projects and possibly public release. Every duplicate carries
+  // 28 Figma-green badges. The real fix is replacing `Header` with a LOCAL
+  // component — which also removes the recurring source that produced the
+  // 2026-07-30 root-inheritance false positive on this same component.
+  // Deferred until after the pilots on Fabi's call, 2026-09-07. Delete this
+  // entry when Header is localised.
+  'ad1ad5639b2a3cec8fd6b481a6f259cf0df1035b',
 ]);
 const SANCTIONED_STYLE_KEYS = new Set([
   '82af684391a0320c9bde008fda40f5a509190300','3dafa63fa46fa9bf1f2fa2d4f4346419b7e0e259',
@@ -569,7 +619,7 @@ const clean = Object.keys(adoption.flaggedVars).length === 0 &&
               Object.keys(adoption.flaggedRemoteInstances).length === 0;
 const spacingClean = Object.keys(base.hardSpacing).length === 0;
 return {
-  version: 'v2.7',
+  version: 'v2.8',
   verdict: !CONFIG.RUN_ADOPTION ? 'ℹ️ adoption pass skipped'
          : (clean ? '✅ ADOPTION CLEAN — no unsanctioned foreign material' : '⚠️ FOREIGN MATERIAL FLAGGED'),
   spacingVerdict: !CONFIG.RUN_BASE ? 'ℹ️ base pass skipped'
