@@ -1,14 +1,44 @@
 // ============================================================================
-// Component lint v2.8 — base property lint + FOREIGN-BINDING ADOPTION LINT
-// Run via the MCP Bridge plugin — ask Claude to fetch this raw file and run it.
+// Component lint v2.9 — base property lint + FOREIGN-BINDING ADOPTION LINT
+// Run via the Figma Console MCP Desktop Bridge plugin: ask Claude to fetch this
+// raw file and run it. Pass timeout: 30000 on the execute call. The default is
+// 5000ms and a full-file run (21k+ nodes) cannot finish in it; the call fails
+// with a WebSocket EXECUTE_CODE timeout and looks like a broken bridge.
 // Report mode is read-only; fix mode rebinds only value-identical foreign
 // bindings.
 //
-// File: NEW [Client Name] / [Platform] UI + DS (2026)   key Vk0disHgUAm5Z7iNQiA4V6
+// File: [Client Name] / [Platform] UI + DS (2026)   key Vk0disHgUAm5Z7iNQiA4V6
+//   Renamed 2026-09-29: the leading `NEW ` was dropped. Headers through v2.8
+//   carried the old name. The key is unchanged.
 //   ⚠️ v2.2 and earlier named key Pb8ZHU7RUJcLmobwZ6wfKm in this header. That
 //   key is DEAD, as is TcBQLQQCBO3RzDduDnYfUN. Verify figma.fileKey before use.
 //
 // ---------------------------------------------------------------------------
+// v2.9 changes vs v2.8 (2026-09-29) — one guard added, one file change
+//   (A) RADIUS CHECK now skips device chrome, matching the spacing check.
+//       `DEVICE_RE` already excluded Status Bar / Home Indicator / Cursor /
+//       Device UI from the spacing check; the radius check had no such guard,
+//       so the same accepted-exception class was reported by one check and
+//       skipped by the other. The full-file run on 2026-09-29 returned 5
+//       hardRadius keys, 48 unbound corners across 12 nodes, EVERY ONE of
+//       them device chrome: Status Bar `Border` at 4.3 and 3.25, Status Bar
+//       `Capacity` at 2.5 and 1.5, Home Indicator `Bar` at 100. The four
+//       Status Bar values are iOS battery-glyph geometry (4.3 is stored as
+//       4.300000190734863, so it arrived with an imported asset). They are
+//       not expressible on the fixed 8-step radius scale, and minting
+//       off-scale radius primitives for them is forbidden by the naming
+//       rules. Nothing outside device chrome was reported.
+//       TRADEOFF: a genuinely wrong radius inside a future device-chrome
+//       component will now go unreported. Same tradeoff the spacing check
+//       already accepts. Device chrome does not ship.
+//       NOTE: there is still no verdict line for radius, so hardRadius is
+//       only visible if the caller reads base.hardRadius directly.
+//   (B) Home Indicator `Bar` radii BOUND to radius/full in the Figma file
+//       (4 variants x 4 corners). 100px on a 4-6px bar and radius/full's
+//       200px both render as a pill, so the change is value-identical on
+//       screen. That one was expressible, so it was fixed rather than
+//       excepted. Only the Status Bar glyph values rely on the new guard.
+//
 // v2.8 changes vs v2.7 (2026-09-07) — one allowlist entry, no logic changes
 //   (A) SANCTIONED_VAR_KEYS += ad1ad5639b2a3cec8fd6b481a6f259cf0df1035b
 //       (`Colors/tertiary/green`). Closed the only finding in the first full
@@ -397,7 +427,7 @@ for (const m of comps.findAll(n => (n.type === 'COMPONENT_SET' || n.type === 'CO
     }
     // v2.5 (e) — COMPONENT_SET roots are the purple-dashed variant container.
     // They never ship; the spacing check has always skipped them.
-    if ('topLeftRadius' in n && n.type !== 'INSTANCE' && n.type !== 'COMPONENT_SET') {
+    if ('topLeftRadius' in n && n.type !== 'INSTANCE' && n.type !== 'COMPONENT_SET' && !DEVICE_RE.test(m.name)) {
       for (const c of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) {
         if (typeof n[c] === 'number' && n[c] > 0 && !bv[c]) {
           const k = m.name + ' (' + n[c] + 'px)';
@@ -619,7 +649,7 @@ const clean = Object.keys(adoption.flaggedVars).length === 0 &&
               Object.keys(adoption.flaggedRemoteInstances).length === 0;
 const spacingClean = Object.keys(base.hardSpacing).length === 0;
 return {
-  version: 'v2.8',
+  version: 'v2.9',
   verdict: !CONFIG.RUN_ADOPTION ? 'ℹ️ adoption pass skipped'
          : (clean ? '✅ ADOPTION CLEAN — no unsanctioned foreign material' : '⚠️ FOREIGN MATERIAL FLAGGED'),
   spacingVerdict: !CONFIG.RUN_BASE ? 'ℹ️ base pass skipped'
